@@ -48,6 +48,17 @@ NOTE = {"cb": None}
 SOURCES = {"источник: авто": "auto", "источник: официальный": "official", "источник: зеркало": "mirror"}
 
 
+def apply_proxy(p):
+    """Прокси (http://host:port) для всех запросов лаунчера: и requests, и urllib берут его из окружения."""
+    p = (p or "").strip()
+    for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        if p:
+            os.environ[k] = p
+        else:
+            os.environ.pop(k, None)
+    log_file(f"прокси: {p or 'нет'}")
+
+
 def note_mirror(name):
     if NOTE["cb"]:
         NOTE["cb"](name)
@@ -456,6 +467,7 @@ class App(ctk.CTk):
                                      "tier": "auto", "extra": [], "tuned": "", "sig": "",
                                      "source": "auto"})
         MIRROR["allow"] = self.conf.get("source", "auto") != "official"
+        apply_proxy(self.conf.get("proxy", ""))
         self.mirror_names = set()
         NOTE["cb"] = self.on_mirror_note
         self.hw = detect()
@@ -522,10 +534,15 @@ class App(ctk.CTk):
         self.source.set(back.get(self.conf.get("source", "auto"), "источник: авто"))
         self.source.pack(side="left")
 
+        self.proxy = self.field(card, placeholder_text="прокси (необязательно): http://127.0.0.1:10809")
+        if self.conf.get("proxy"):
+            self.proxy.insert(0, self.conf["proxy"])
+        self.proxy.pack(pady=(10, 0))
+
         self.play = ctk.CTkButton(card, text="ИГРАТЬ", width=326, height=50, corner_radius=14,
                                   font=("Segoe UI", 18, "bold"), fg_color=self.ACCENT, hover_color="#a6ffc9",
                                   text_color="#04110a", command=self.on_play)
-        self.play.pack(pady=(16, 0))
+        self.play.pack(pady=(12, 0))
         self.bar = ctk.CTkProgressBar(card, width=326, height=8, progress_color=self.ACCENT, fg_color="#16211c")
         self.bar.set(0)
         self.bar.pack(pady=(14, 6))
@@ -586,6 +603,8 @@ class App(ctk.CTk):
                          version=self.version.get().strip() or DEFAULT_VERSION, tier=self.tier.get(),
                          source=SOURCES[self.source.get()])
         MIRROR["allow"] = self.conf["source"] != "official"
+        self.conf["proxy"] = self.proxy.get().strip()
+        apply_proxy(self.conf["proxy"])
         save_json(CONF, self.conf)
         self.play.configure(state="disabled")
         threading.Thread(target=self.work, daemon=True).start()
