@@ -2,10 +2,12 @@
 import ctypes
 import hashlib
 import json
+import lzma
 import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -70,6 +72,81 @@ def _request(self, method, url, *a, **kw):
 
 
 requests.sessions.Session.request = _request
+
+
+def log_file(text):
+    try:
+        ROOT.mkdir(parents=True, exist_ok=True)
+        with open(ROOT / "launcher.log", "a", encoding="utf-8") as f:
+            f.write(time.strftime("%H:%M:%S ") + text + "\n")
+    except Exception:
+        pass
+
+
+def _candidates(url):
+    """Список адресов для одного файла: сначала то, что сейчас работает, потом запасной."""
+    mirror = next((dst + url[len(src):] for src, dst in GAME_RULES if url.startswith(src)), None)
+    if not MIRROR["allow"] or not mirror:
+        return [url]
+    return [mirror, url] if MIRROR["game"] else [url, mirror]
+
+
+def robust_download(url, path, callback=None, sha1=None, lzma_compressed=False, session=None,
+                    minecraft_directory=None, overwrite=False):
+    """Замена download_file из minecraft-launcher-lib.
+    Оригинал молча пропускает файл, если сервер ответил не 200 (например, зеркало вернуло 404/429),
+    и потом установка падает с WinError 2. Здесь файл перекачивается с повторами и с обоих адресов,
+    а если не получилось - выбрасывается понятная ошибка."""
+    path = str(path)
+    if os.path.isfile(path) and not overwrite:
+        if sha1 is None:
+            return False
+        with open(path, "rb") as f:
+            if hashlib.sha1(f.read()).hexdigest() == sha1:
+                return False
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if callback and callback.get("setStatus"):
+        callback["setStatus"]("Скачиваю " + os.path.basename(path))
+    sess = session or requests.Session()
+    last = None
+    for attempt in range(5):
+        for u in _candidates(url):
+            try:
+                r = _orig_request(sess, "GET", u, headers=UA, timeout=(10, 60))
+                if r.status_code != 200:
+                    last = f"HTTP {r.status_code} ({u.split('/')[2]})"
+                    if r.status_code == 429:
+                        time.sleep(2 + attempt * 2)
+                    continue
+                data = r.content
+                if lzma_compressed:
+                    data = lzma.decompress(data)
+                if sha1 and hashlib.sha1(data).hexdigest() != sha1:
+                    last = f"не совпала контрольная сумма ({u.split('/')[2]})"
+                    continue
+                tmp = path + ".part"
+                with open(tmp, "wb") as f:
+                    f.write(data)
+                os.replace(tmp, path)
+                return True
+            except Exception as e:
+                last = f"{type(e).__name__} ({u.split('/')[2]})"
+        time.sleep(1.5 * (attempt + 1))
+    msg = f"не скачался файл {os.path.basename(path)}: {last}"
+    log_file(msg + "  <- " + url)
+    raise RuntimeError(msg)
+
+
+def patch_library_downloads():
+    """Подменяем download_file во всех модулях библиотеки (они импортируют его по имени)."""
+    import minecraft_launcher_lib._helper as helper
+    orig = helper.download_file
+    for name, mod in list(sys.modules.items()):
+        if name.startswith("minecraft_launcher_lib") and getattr(mod, "download_file", None) is orig:
+            mod.download_file = robust_download
+
+
+patch_library_downloads()
 
 
 def reachable(url, timeout=5):
@@ -522,7 +599,8 @@ class App(ctk.CTk):
             self.proc.wait()
             self.say("Игра закрыта")
         except Exception as e:
-            self.say(f"Ошибка: {e}")
+            log_file(f"Ошибка: {e!r}")
+            self.say(f"Ошибка: {e}"[:230])
         finally:
             self.ui(lambda: self.play.configure(state="normal"))
 
