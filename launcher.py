@@ -227,24 +227,36 @@ def retry(fn, say=None, tries=5):
 
 
 def modrinth_open(url, timeout):
-    """Сначала официальный Modrinth, при неудаче зеркало MCIM (и запоминаем, что оно работает)."""
+    """Открывает адрес Modrinth через зеркало MCIM и напрямую.
+    Если игру пришлось качать с зеркала (значит, зарубежные сайты режутся) или зеркало уже
+    выручало раньше - зеркало идёт первым. Каждый адрес пробуем 2 раза, ошибки копим,
+    чтобы в логе было видно, что именно не работает."""
     mirror = next((dst + url[len(src):] for src, dst in MOD_RULES if url.startswith(src)), None)
     if not MIRROR["allow"]:
         mirror = None
-    order = [mirror, url] if (MIRROR["mods_first"] and mirror) else [url, mirror]
-    last = None
-    for u in order:
-        if not u:
-            continue
-        try:
-            r = urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=timeout)
-            if u != url:
-                MIRROR["mods_first"] = True
-                note_mirror("MCIM (mcimirror.top)")
-            return r
-        except Exception as e:
-            last = e
-    raise last
+    mirror_first = mirror and (MIRROR["mods_first"] or MIRROR["game"])
+    order = [mirror, url] if mirror_first else [url, mirror]
+    errs = {}
+    for attempt in range(2):
+        for u in order:
+            if not u:
+                continue
+            host = u.split("/")[2]
+            try:
+                r = urllib.request.urlopen(urllib.request.Request(u, headers=UA),
+                                           timeout=timeout if attempt else min(timeout, 15))
+                if u != url:
+                    MIRROR["mods_first"] = True
+                    note_mirror("MCIM (mcimirror.top)")
+                return r
+            except urllib.error.HTTPError as e:
+                errs[host] = f"HTTP {e.code}"
+            except Exception as e:
+                errs[host] = type(e).__name__
+        time.sleep(1.5)
+    msg = "; ".join(f"{h}: {e}" for h, e in errs.items())
+    log_file(f"{url} -> {msg}")
+    raise RuntimeError(msg)
 
 
 def get_json(url):
