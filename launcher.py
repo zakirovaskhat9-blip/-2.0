@@ -74,6 +74,30 @@ def _request(self, method, url, *a, **kw):
 requests.sessions.Session.request = _request
 
 
+LOG4J_FALLBACK = """<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="SysOut" target="SYSTEM_OUT">
+            <PatternLayout pattern="[%d{HH:mm:ss}] [%t/%level]: %msg{nolookups}%n" />
+        </Console>
+        <RollingRandomAccessFile name="File" fileName="logs/latest.log" filePattern="logs/%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout pattern="[%d{HH:mm:ss}] [%t/%level]: %msg{nolookups}%n" />
+            <Policies>
+                <TimeBasedTriggeringPolicy />
+                <OnStartupTriggeringPolicy />
+            </Policies>
+        </RollingRandomAccessFile>
+    </Appenders>
+    <Loggers>
+        <Root level="info">
+            <AppenderRef ref="SysOut"/>
+            <AppenderRef ref="File"/>
+        </Root>
+    </Loggers>
+</Configuration>
+"""
+
+
 def log_file(text):
     try:
         ROOT.mkdir(parents=True, exist_ok=True)
@@ -109,12 +133,13 @@ def robust_download(url, path, callback=None, sha1=None, lzma_compressed=False, 
         callback["setStatus"]("Скачиваю " + os.path.basename(path))
     sess = session or requests.Session()
     last = None
+    errs = {}
     for attempt in range(5):
         for u in _candidates(url):
             try:
                 r = _orig_request(sess, "GET", u, headers=UA, timeout=(10, 60))
                 if r.status_code != 200:
-                    last = f"HTTP {r.status_code} ({u.split('/')[2]})"
+                    last = errs[u.split('/')[2]] = f"HTTP {r.status_code}"
                     if r.status_code == 429:
                         time.sleep(2 + attempt * 2)
                     continue
@@ -122,7 +147,7 @@ def robust_download(url, path, callback=None, sha1=None, lzma_compressed=False, 
                 if lzma_compressed:
                     data = lzma.decompress(data)
                 if sha1 and hashlib.sha1(data).hexdigest() != sha1:
-                    last = f"не совпала контрольная сумма ({u.split('/')[2]})"
+                    last = errs[u.split('/')[2]] = "не совпала контрольная сумма"
                     continue
                 tmp = path + ".part"
                 with open(tmp, "wb") as f:
@@ -130,9 +155,16 @@ def robust_download(url, path, callback=None, sha1=None, lzma_compressed=False, 
                 os.replace(tmp, path)
                 return True
             except Exception as e:
-                last = f"{type(e).__name__} ({u.split('/')[2]})"
+                last = errs[u.split('/')[2]] = type(e).__name__
         time.sleep(1.5 * (attempt + 1))
-    msg = f"не скачался файл {os.path.basename(path)}: {last}"
+    name = os.path.basename(path)
+    if re.fullmatch(r"client-[\d.]+\.xml", name):
+        # настройки логов log4j: игре не обязательны, пишем стандартный конфиг сами
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(LOG4J_FALLBACK)
+        log_file(f"{name}: не скачался ({errs}), создан стандартный конфиг")
+        return True
+    msg = f"не скачался файл {name}: " + "; ".join(f"{h}: {e}" for h, e in errs.items())
     log_file(msg + "  <- " + url)
     raise RuntimeError(msg)
 
