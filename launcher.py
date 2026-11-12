@@ -329,6 +329,12 @@ def detect():
 # ---------- моды без Modrinth: локальная папка и GitHub Release ----------
 GH_REPO = "__GH_REPO__"  # при сборке на GitHub подставляется имя этого репозитория (владелец/репо)
 GH_CACHE = {}
+PINS = {"sodium": "0.8.12"}  # slug -> версия, которую нужно держать (совместимость с Voxy)
+
+
+def pin_ok(slug, *texts):
+    pin = PINS.get(slug)
+    return not pin or any(re.search(rf"(?<!\d){re.escape(pin)}(?!\d)", t or "") for t in texts)
 
 
 def _norm(s):
@@ -349,7 +355,7 @@ def mod_from_bundle(slug, mods_dir):
     for d in bundle_dirs():
         if not d.is_dir():
             continue
-        jars = sorted((j for j in d.glob("*.jar") if _match(slug, j.name)),
+        jars = sorted((j for j in d.glob("*.jar") if _match(slug, j.name) and pin_ok(slug, j.name)),
                       key=lambda j: j.stat().st_mtime, reverse=True)
         if jars:
             dest = mods_dir / jars[0].name
@@ -375,7 +381,8 @@ def mod_from_github(slug, mc, mods_dir, log):
         except Exception as e:
             log_file(f"GitHub release mods-{mc}: {e!r}")
             GH_CACHE[mc] = []
-    asset = next((a for a in GH_CACHE[mc] if a["name"].endswith(".jar") and _match(slug, a["name"])), None)
+    asset = next((a for a in GH_CACHE[mc] if a["name"].endswith(".jar") and _match(slug, a["name"])
+                  and pin_ok(slug, a["name"])), None)
     if not asset:
         return None
     dest = mods_dir / asset["name"]
@@ -425,8 +432,9 @@ def install_mod_modrinth(slug, mc, manifest, mods_dir, log):
         versions.sort(key=lambda v: (v.get("version_type") == "release", v.get("date_published", "")), reverse=True)
     else:
         versions = [v for v in versions if "fabric" in v.get("loaders", []) and mc in v.get("game_versions", [])]
+    versions = [v for v in versions if pin_ok(slug, v.get("version_number"), *(f["filename"] for f in v["files"]))]
     if not versions:
-        FAIL[slug] = f"нет версии под {mc}"
+        FAIL[slug] = f"нет версии под {mc}" + (f" (закреплена {PINS[slug]})" if slug in PINS else "")
         log(f"{slug}: нет версии под {mc}")
         return False
     files = versions[0]["files"]
