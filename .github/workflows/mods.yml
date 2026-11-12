@@ -11,8 +11,8 @@ on:
         description: "Версия Minecraft"
         default: "1.21.11"
       mods:
-        description: "Моды (slug через пробел)"
-        default: "fabric-api sodium lithium ferrite-core modernfix immediatelyfast memoryleakfix voxy modmenu"
+        description: "Моды (slug через пробел; slug@версия - закрепить версию)"
+        default: "fabric-api sodium@0.8.12 lithium ferrite-core modernfix immediatelyfast memoryleakfix voxy modmenu"
 
 permissions:
   contents: write
@@ -34,12 +34,19 @@ jobs:
           def get(url):
               return urllib.request.urlopen(urllib.request.Request(url, headers=H), timeout=60)
           failed = []
-          for slug in os.environ["MODS"].split():
+          import re
+          for token in os.environ["MODS"].split():
+              slug, _, pin = token.partition("@")
               try:
                   q = urllib.parse.urlencode({"loaders": json.dumps(["fabric"]), "game_versions": json.dumps([mc])})
                   vers = json.load(get(f"https://api.modrinth.com/v2/project/{slug}/version?{q}"))
                   if not vers:
                       raise RuntimeError(f"нет версии под {mc}")
+                  if pin:
+                      rx = re.compile(r"(?<!\d)" + re.escape(pin) + r"(?!\d)")
+                      vers = [v for v in vers if rx.search(v["version_number"]) or any(rx.search(x["filename"]) for x in v["files"])]
+                      if not vers:
+                          raise RuntimeError(f"нет версии {pin} под {mc}")
                   vers.sort(key=lambda v: (v["version_type"] == "release", v["date_published"]), reverse=True)
                   files = vers[0]["files"]
                   f = next((x for x in files if x.get("primary")), files[0])
@@ -64,6 +71,7 @@ jobs:
           MC: ${{ inputs.mc_version }}
         run: |
           TAG="mods-$MC"
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
-            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Моды $MC" --notes "Моды для FastLauncher ($MC)"
+          # пересоздаём релиз, чтобы старые версии (например, Sodium 0.8.14) не остались рядом с новыми
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Моды $MC" --notes "Моды для FastLauncher ($MC)"
           gh release upload "$TAG" mods/*.jar --repo "$GITHUB_REPOSITORY" --clobber
