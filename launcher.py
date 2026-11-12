@@ -329,7 +329,7 @@ def detect():
 # ---------- моды без Modrinth: локальная папка и GitHub Release ----------
 GH_REPO = "__GH_REPO__"  # при сборке на GitHub подставляется имя этого репозитория (владелец/репо)
 GH_CACHE = {}
-PINS = {"sodium": "0.8.12"}  # slug -> версия, которую нужно держать (совместимость с Voxy)
+PINS = {"sodium": "0.8.12"}  # slug -> версия (Voxy требует Sodium <= 0.8.12)
 
 
 def pin_ok(slug, *texts):
@@ -510,7 +510,7 @@ def sync_mods(slugs, mc, log):
 # Набор оптимизации: всегда ставится вместе с Sodium (VulkanMod пока отключён)
 OPT_MODS = ["fabric-api", "sodium", "lithium", "ferrite-core", "modernfix",
             "immediatelyfast", "memoryleakfix", "voxy", "modmenu",
-            "sodium-extra", "ebe", "cull-leaves", "moreculling", "entityculling",
+            "ebe", "cull-leaves", "moreculling", "entityculling",
             "immersive-optimization", "too-many-entities", "entityopt"]
 
 
