@@ -1,0 +1,67 @@
+name: Fetch mods
+
+# Запускается вручную: Actions -> Fetch mods -> Run workflow.
+# Скачивает моды с Modrinth на серверах GitHub и кладёт их в Release mods-<версия>,
+# откуда их берёт лаунчер (работает без VPN).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mc_version:
+        description: "Версия Minecraft"
+        default: "1.21.11"
+      mods:
+        description: "Моды (slug через пробел)"
+        default: "fabric-api sodium lithium ferrite-core modernfix immediatelyfast memoryleakfix voxy modmenu"
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачать моды с Modrinth
+        env:
+          MC: ${{ inputs.mc_version }}
+          MODS: ${{ inputs.mods }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, sys, urllib.parse, urllib.request
+          mc = os.environ["MC"]
+          os.makedirs("mods", exist_ok=True)
+          H = {"User-Agent": "FastLauncher-mods-fetch"}
+          def get(url):
+              return urllib.request.urlopen(urllib.request.Request(url, headers=H), timeout=60)
+          failed = []
+          for slug in os.environ["MODS"].split():
+              try:
+                  q = urllib.parse.urlencode({"loaders": json.dumps(["fabric"]), "game_versions": json.dumps([mc])})
+                  vers = json.load(get(f"https://api.modrinth.com/v2/project/{slug}/version?{q}"))
+                  if not vers:
+                      raise RuntimeError(f"нет версии под {mc}")
+                  vers.sort(key=lambda v: (v["version_type"] == "release", v["date_published"]), reverse=True)
+                  files = vers[0]["files"]
+                  f = next((x for x in files if x.get("primary")), files[0])
+                  data = get(f["url"]).read()
+                  if hashlib.sha512(data).hexdigest() != f["hashes"]["sha512"]:
+                      raise RuntimeError("хеш не совпал")
+                  open(os.path.join("mods", f["filename"]), "wb").write(data)
+                  print("OK ", slug, f["filename"])
+              except Exception as e:
+                  print("FAIL", slug, e)
+                  failed.append(slug)
+          if failed:
+              print("Не скачались:", failed)
+              sys.exit(1)
+          PY
+
+      - name: Опубликовать в Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MC: ${{ inputs.mc_version }}
+        run: |
+          TAG="mods-$MC"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Моды $MC" --notes "Моды для FastLauncher ($MC)"
+          gh release upload "$TAG" mods/*.jar --repo "$GITHUB_REPOSITORY" --clobber
