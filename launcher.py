@@ -45,6 +45,7 @@ MOD_RULES = [  # зеркало модов MCIM
 ]
 MIRROR = {"game": False, "mods_first": False, "allow": True}
 NOTE = {"cb": None}
+FAIL = {}  # slug -> причина, почему мод не поставился
 SOURCES = {"источник: авто": "auto", "источник: официальный": "official", "источник: зеркало": "mirror"}
 
 
@@ -329,6 +330,14 @@ def install_mod(slug, mc, manifest, mods_dir, log):
     q = urllib.parse.urlencode({"loaders": json.dumps(["fabric"]), "game_versions": json.dumps([mc])})
     versions = get_json(f"https://api.modrinth.com/v2/project/{slug}/version?{q}")
     if not versions:
+        # зеркало может игнорировать фильтры или не знать такого запроса - берём все версии и фильтруем сами
+        allv = get_json(f"https://api.modrinth.com/v2/project/{slug}/version")
+        versions = [v for v in allv if "fabric" in v.get("loaders", []) and mc in v.get("game_versions", [])]
+        versions.sort(key=lambda v: (v.get("version_type") == "release", v.get("date_published", "")), reverse=True)
+    else:
+        versions = [v for v in versions if "fabric" in v.get("loaders", []) and mc in v.get("game_versions", [])]
+    if not versions:
+        FAIL[slug] = f"нет версии под {mc}"
         log(f"{slug}: нет версии под {mc}")
         return False
     files = versions[0]["files"]
@@ -370,6 +379,7 @@ def sync_mods(slugs, mc, log):
             if not install_mod(slug, mc, manifest, mods_dir, log):
                 missing.append(slug)
         except Exception as e:
+            FAIL[slug] = str(e)[:120]
             log(f"{slug}: {e}")
             log_file(f"мод {slug}: {e!r}")
             missing.append(slug)
@@ -659,7 +669,7 @@ class App(ctk.CTk):
             self.ui(self.refresh_mods)
             self.ui(lambda: self.bar.set(1))
             self.proc = subprocess.Popen(cmd, cwd=GAME, creationflags=0x08000000 if os.name == "nt" else 0)
-            self.say("Игра запущена" + (f" (без модов: {', '.join(skipped)} - не скачались)" if skipped else ""))
+            self.say("Игра запущена" + (f" (без модов: {', '.join(skipped)} - не скачались; причина: {FAIL.get(skipped[0], '?')})" if skipped else ""))
             self.proc.wait()
             self.say("Игра закрыта")
         except Exception as e:
