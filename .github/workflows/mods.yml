@@ -52,7 +52,9 @@ jobs:
                   print("FAIL", slug, e)
                   failed.append(slug)
           if failed:
-              print("Не скачались:", failed)
+              print(f"::warning::Не скачались: {', '.join(failed)}")
+          if not os.listdir("mods"):
+              print("::error::Ни один мод не скачался")
               sys.exit(1)
           PY
 
