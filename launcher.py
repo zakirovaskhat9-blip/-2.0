@@ -326,7 +326,96 @@ def detect():
 
 
 # ---------- моды (Modrinth) ----------
+# ---------- моды без Modrinth: локальная папка и GitHub Release ----------
+GH_REPO = "__GH_REPO__"  # при сборке на GitHub подставляется имя этого репозитория (владелец/репо)
+GH_CACHE = {}
+
+
+def _norm(s):
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def _match(slug, filename):
+    return _norm(filename).startswith(_norm(slug))
+
+
+def bundle_dirs():
+    base = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+    return [base / "mods_bundle", ROOT / "mods_bundle"]
+
+
+def mod_from_bundle(slug, mods_dir):
+    """Берёт мод из папки mods_bundle рядом с лаунчером (или в .fastlauncher)."""
+    for d in bundle_dirs():
+        if not d.is_dir():
+            continue
+        jars = sorted((j for j in d.glob("*.jar") if _match(slug, j.name)),
+                      key=lambda j: j.stat().st_mtime, reverse=True)
+        if jars:
+            dest = mods_dir / jars[0].name
+            if not dest.exists():
+                shutil.copyfile(jars[0], dest)
+            return jars[0].name
+    return None
+
+
+def _gh_open(url, timeout):
+    req = urllib.request.Request(url, headers={"User-Agent": "FastLauncher", "Accept": "application/vnd.github+json"})
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def mod_from_github(slug, mc, mods_dir, log):
+    """Берёт мод из GitHub Release с тегом mods-<версия> в этом же репозитории."""
+    if "/" not in GH_REPO or "__" in GH_REPO:
+        return None
+    if mc not in GH_CACHE:
+        try:
+            with _gh_open(f"https://api.github.com/repos/{GH_REPO}/releases/tags/mods-{mc}", 15) as r:
+                GH_CACHE[mc] = json.load(r).get("assets", [])
+        except Exception as e:
+            log_file(f"GitHub release mods-{mc}: {e!r}")
+            GH_CACHE[mc] = []
+    asset = next((a for a in GH_CACHE[mc] if a["name"].endswith(".jar") and _match(slug, a["name"])), None)
+    if not asset:
+        return None
+    dest = mods_dir / asset["name"]
+    if not dest.exists():
+        log(f"Скачиваю {slug} с GitHub...")
+        def download():
+            tmp = dest.parent / (dest.name + ".part")
+            h = hashlib.sha256()
+            with _gh_open(asset["browser_download_url"], 60) as r, open(tmp, "wb") as out:
+                while chunk := r.read(1 << 16):
+                    out.write(chunk)
+                    h.update(chunk)
+            want = (asset.get("digest") or "").removeprefix("sha256:")
+            if want and h.hexdigest() != want:
+                tmp.unlink(missing_ok=True)
+                raise RuntimeError("хеш файла не совпал")
+            os.replace(tmp, dest)
+        retry(download, log, tries=2)
+    return asset["name"]
+
+
 def install_mod(slug, mc, manifest, mods_dir, log):
+    # 1) локальная папка, 2) GitHub, 3) Modrinth и его зеркала
+    for source in (lambda: mod_from_bundle(slug, mods_dir),
+                   lambda: mod_from_github(slug, mc, mods_dir, log)):
+        try:
+            name = source()
+        except Exception as e:
+            log_file(f"{slug}: {e!r}")
+            name = None
+        if name:
+            old = manifest.get(slug)
+            if old and old != name:
+                (mods_dir / old).unlink(missing_ok=True)
+            manifest[slug] = name
+            return True
+    return install_mod_modrinth(slug, mc, manifest, mods_dir, log)
+
+
+def install_mod_modrinth(slug, mc, manifest, mods_dir, log):
     q = urllib.parse.urlencode({"loaders": json.dumps(["fabric"]), "game_versions": json.dumps([mc])})
     versions = get_json(f"https://api.modrinth.com/v2/project/{slug}/version?{q}")
     if not versions:
