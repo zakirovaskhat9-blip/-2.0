@@ -370,19 +370,41 @@ def _gh_open(url, timeout):
     return urllib.request.urlopen(req, timeout=timeout)
 
 
-def mod_from_github(slug, mc, mods_dir, log):
-    """Берёт мод из GitHub Release с тегом mods-<версия> в этом же репозитории."""
+def gh_release(mc):
+    """Список файлов релиза mods-<версия> и его index.json (slug -> имя файла, зависимости)."""
     if "/" not in GH_REPO or "__" in GH_REPO:
-        return None
+        return [], {}
     if mc not in GH_CACHE:
+        assets, index = [], {}
         try:
             with _gh_open(f"https://api.github.com/repos/{GH_REPO}/releases/tags/mods-{mc}", 15) as r:
-                GH_CACHE[mc] = json.load(r).get("assets", [])
+                assets = json.load(r).get("assets", [])
+            idx = next((a for a in assets if a["name"] == "index.json"), None)
+            if idx:
+                with _gh_open(idx["browser_download_url"], 15) as r:
+                    index = json.load(r)
         except Exception as e:
             log_file(f"GitHub release mods-{mc}: {e!r}")
-            GH_CACHE[mc] = []
-    asset = next((a for a in GH_CACHE[mc] if a["name"].endswith(".jar") and _match(slug, a["name"])
-                  and pin_ok(slug, a["name"])), None)
+        GH_CACHE[mc] = (assets, index)
+    return GH_CACHE[mc]
+
+
+def gh_deps(mc):
+    """Зависимости модов (например, Cloth Config), которые workflow положил в релиз."""
+    return list(gh_release(mc)[1].get("deps", {}))
+
+
+def mod_from_github(slug, mc, mods_dir, log):
+    """Берёт мод из GitHub Release с тегом mods-<версия> в этом же репозитории."""
+    assets, index = gh_release(mc)
+    if not assets:
+        return None
+    wanted = {**index.get("deps", {}), **index.get("mods", {})}.get(slug)
+    if wanted:
+        asset = next((a for a in assets if a["name"] == wanted), None)
+    else:
+        asset = next((a for a in assets if a["name"].endswith(".jar") and _match(slug, a["name"])
+                      and pin_ok(slug, a["name"])), None)
     if not asset:
         return None
     dest = mods_dir / asset["name"]
@@ -467,6 +489,7 @@ def sync_mods(slugs, mc, log):
     mods_dir = GAME / "mods"
     mods_dir.mkdir(parents=True, exist_ok=True)
     manifest = load_json(MODS_JSON, {})
+    slugs = list(slugs) + [d for d in gh_deps(mc) if d not in slugs]
     for slug in list(manifest):
         if slug not in slugs:
             (mods_dir / manifest.pop(slug)).unlink(missing_ok=True)
@@ -486,7 +509,9 @@ def sync_mods(slugs, mc, log):
 
 # Набор оптимизации: всегда ставится вместе с Sodium (VulkanMod пока отключён)
 OPT_MODS = ["fabric-api", "sodium", "lithium", "ferrite-core", "modernfix",
-            "immediatelyfast", "memoryleakfix", "voxy", "modmenu"]
+            "immediatelyfast", "memoryleakfix", "voxy", "modmenu",
+            "sodium-extra", "ebe", "cull-leaves", "moreculling", "entityculling",
+            "immersive-optimization", "too-many-entities", "entityopt"]
 
 
 def plan_mods(tier, vulkan):
