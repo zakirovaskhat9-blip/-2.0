@@ -450,7 +450,7 @@ def make_background(w, h):
 
 
 class App(ctk.CTk):
-    W, H = 880, 560
+    W, H = 880, 660
     ACCENT = "#7CFFB2"
     CARD = "#0b100e"
     FIELD = "#121a17"
@@ -500,7 +500,7 @@ class App(ctk.CTk):
         ctk.CTkLabel(parent, text=text, font=("Segoe UI", 11), text_color=self.MUTED).pack(anchor="w", padx=22)
 
     def build_left(self):
-        card = self.card(28, 24, 370, 512)
+        card = self.card(28, 24, 370, 612)
         ctk.CTkLabel(card, text="FASTLAUNCHER", font=("Segoe UI", 26, "bold"),
                      text_color=self.ACCENT).pack(pady=(20, 0))
         ctk.CTkLabel(card, text="авто-настройка под твой ПК", font=("Segoe UI", 12),
@@ -553,7 +553,7 @@ class App(ctk.CTk):
         self.credit.pack(pady=(4, 0))
 
     def build_right(self):
-        card = self.card(430, 346, 420, 190)
+        card = self.card(430, 446, 420, 190)
         ctk.CTkLabel(card, text="Моды", font=("Segoe UI", 18, "bold"), text_color=self.ACCENT).pack(
             anchor="w", padx=22, pady=(16, 0))
         self.mods_label = ctk.CTkLabel(card, text="", font=("Segoe UI", 12), text_color="#bfe8d2",
