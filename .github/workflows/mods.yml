@@ -12,7 +12,7 @@ on:
         default: "1.21.11"
       mods:
         description: "Моды (slug через пробел; slug@версия - закрепить версию)"
-        default: "fabric-api sodium@0.8.12 lithium ferrite-core modernfix immediatelyfast memoryleakfix voxy modmenu sodium-extra ebe cull-leaves moreculling entityculling immersive-optimization too-many-entities entityopt"
+        default: "fabric-api sodium@0.8.12 lithium ferrite-core modernfix immediatelyfast memoryleakfix voxy modmenu ebe cull-leaves moreculling entityculling immersive-optimization too-many-entities entityopt"
 
 permissions:
   contents: write
