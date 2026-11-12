@@ -348,18 +348,19 @@ def sync_mods(slugs, mc, log):
                 missing.append(slug)
         except Exception as e:
             log(f"{slug}: {e}")
+            log_file(f"мод {slug}: {e!r}")
             missing.append(slug)
     save_json(MODS_JSON, manifest)
     return missing
 
 
+# Набор оптимизации: всегда ставится вместе с Sodium (VulkanMod пока отключён)
+OPT_MODS = ["fabric-api", "sodium", "lithium", "ferrite-core", "modernfix",
+            "immediatelyfast", "memoryleakfix", "voxy", "modmenu"]
+
+
 def plan_mods(tier, vulkan):
-    """Слабый ПК -> Sodium. Иначе, если есть Vulkan -> VulkanMod. Запасной вариант всегда Sodium."""
-    base = ["fabric-api", "lithium", "ferrite-core"]
-    sodium = base + ["sodium"] + (["iris"] if tier == "high" else [])
-    if tier != "low" and vulkan:
-        return base + ["vulkanmod"], sodium
-    return sodium, sodium
+    return OPT_MODS, OPT_MODS
 
 
 def apply_options(tier):
