@@ -19,6 +19,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller
 
+      - name: Подставить имя репозитория (для скачивания модов из Releases)
+        shell: pwsh
+        run: (Get-Content launcher.py -Encoding UTF8) -replace '__GH_REPO__', $env:GITHUB_REPOSITORY | Set-Content launcher.py -Encoding UTF8
+
       - name: Build exe
         run: pyinstaller --onefile --noconsole --name FastLauncher --collect-all customtkinter launcher.py
 
@@ -26,3 +30,4 @@ jobs:
         with:
           name: FastLauncher
           path: dist/FastLauncher.exe
+
