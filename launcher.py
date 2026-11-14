@@ -1,5 +1,4 @@
-"""FastLauncher v0.3 - быстрый лаунчер Minecraft (Fabric) с автоподбором настроек под ПК."""
-import ctypes
+"""Enchanted - быстрый лаунчер Minecraft (Fabric)."""
 import hashlib
 import json
 import lzma
@@ -9,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import tkinter as tk
 import time
 import urllib.error
 import urllib.parse
@@ -20,12 +20,16 @@ import customtkinter as ctk
 import minecraft_launcher_lib as mll
 import psutil
 import requests
+from PIL import ImageTk
 
-ROOT = (Path(os.environ["APPDATA"]) if os.name == "nt" else Path.home()) / ".fastlauncher"
+from logo import draw_logo
+
+APP_NAME = "Enchanted"
+ROOT = (Path(os.environ["APPDATA"]) if os.name == "nt" else Path.home()) / ".fastlauncher"  # имя папки не меняем: уже скачанная игра остаётся на месте
 GAME = ROOT / "game"
 CONF = ROOT / "config.json"
 MODS_JSON = ROOT / "mods.json"
-UA = {"User-Agent": "FastLauncher/0.1 (personal project)"}
+UA = {"User-Agent": "Enchanted/1.0 (personal project)"}
 DEFAULT_VERSION = "1.21.11"
 
 # ---------- зеркала (на случай блокировки серверов Mojang / Modrinth) ----------
@@ -47,17 +51,6 @@ MIRROR = {"game": False, "mods_first": False, "allow": True}
 NOTE = {"cb": None}
 FAIL = {}  # slug -> причина, почему мод не поставился
 SOURCES = {"источник: авто": "auto", "источник: официальный": "official", "источник: зеркало": "mirror"}
-
-
-def apply_proxy(p):
-    """Прокси (http://host:port) для всех запросов лаунчера: и requests, и urllib берут его из окружения."""
-    p = (p or "").strip()
-    for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
-        if p:
-            os.environ[k] = p
-        else:
-            os.environ.pop(k, None)
-    log_file(f"прокси: {p or 'нет'}")
 
 
 def note_mirror(name):
@@ -203,12 +196,6 @@ def reachable(url, timeout=5):
         return False
 
 
-# Профили производительности: память, настройки игры, графика
-TIERS = {
-    "low": dict(xmx=2048, render=6, sim=5, particles=2, fps=60, graphics=0),
-    "mid": dict(xmx=4096, render=10, sim=8, particles=1, fps=120, graphics=1),
-    "high": dict(xmx=6144, render=16, sim=12, particles=0, fps=260, graphics=1),
-}
 JVM_FLAGS = ["-XX:+UseG1GC", "-XX:MaxGCPauseMillis=100", "-XX:+ParallelRefProcEnabled"]
 
 
@@ -278,51 +265,8 @@ def get_json(url):
     return retry(go, tries=2)
 
 
-# ---------- определение железа ----------
-def has_vulkan():
-    names = ["vulkan-1.dll"] if os.name == "nt" else ["libvulkan.so.1", "libvulkan.1.dylib"]
-    for n in names:
-        try:
-            ctypes.CDLL(n)
-            return True
-        except OSError:
-            pass
-    return False
-
-
-def gpu_name():
-    if os.name != "nt":
-        return ""
-    try:
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "(Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join '; '"],
-            capture_output=True, text=True, timeout=8, creationflags=0x08000000)
-        return out.stdout.strip()
-    except Exception:
-        return ""
-
-
-def is_weak_gpu(gpu):
-    g = gpu.lower()
-    if not g:
-        return True
-    if "intel" in g and "arc" not in g and not any(x in g for x in ("nvidia", "geforce", "radeon rx")):
-        return True
-    return bool(re.search(r"geforce\s+(gt\s?\d|gtx\s?[4-7]\d\d\b)|radeon\s+(hd|r[3-7]\b)", g))
-
-
-def detect():
-    ram = psutil.virtual_memory().total / 2**30
-    cores = psutil.cpu_count(logical=True) or 2
-    gpu = gpu_name()
-    weak = is_weak_gpu(gpu)
-    score = (2 if ram >= 16 else 1 if ram >= 8 else 0)
-    score += (2 if cores >= 12 else 1 if cores >= 6 else 0)
-    score += 0 if weak else 2
-    # слабая или старая видеокарта -> всегда low, игра упирается именно в неё
-    tier = "low" if weak else "low" if score <= 2 else "mid" if score <= 4 else "high"
-    return dict(ram=ram, cores=cores, gpu=gpu or "не определена", vulkan=has_vulkan(), tier=tier)
+def ram_gb():
+    return psutil.virtual_memory().total / 2**30
 
 
 # ---------- моды (Modrinth) ----------
@@ -366,7 +310,7 @@ def mod_from_bundle(slug, mods_dir):
 
 
 def _gh_open(url, timeout):
-    req = urllib.request.Request(url, headers={"User-Agent": "FastLauncher", "Accept": "application/vnd.github+json"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Enchanted", "Accept": "application/vnd.github+json"})
     return urllib.request.urlopen(req, timeout=timeout)
 
 
@@ -507,32 +451,11 @@ def sync_mods(slugs, mc, log):
     return missing
 
 
-# Набор оптимизации: всегда ставится вместе с Sodium (VulkanMod пока отключён)
+# Набор модов: ставится всегда
 OPT_MODS = ["fabric-api", "sodium", "lithium", "ferrite-core", "modernfix",
             "immediatelyfast", "memoryleakfix", "voxy", "modmenu",
             "ebe", "cull-leaves", "moreculling", "entityculling",
             "immersive-optimization", "too-many-entities", "entityopt"]
-
-
-def plan_mods(tier, vulkan):
-    return OPT_MODS, OPT_MODS
-
-
-def apply_options(tier):
-    t = TIERS[tier]
-    want = {"renderDistance": t["render"], "simulationDistance": t["sim"], "particles": t["particles"],
-            "maxFps": t["fps"], "graphicsMode": t["graphics"]}
-    p = GAME / "options.txt"
-    lines = p.read_text("utf-8").splitlines() if p.exists() else []
-    seen = set()
-    for i, line in enumerate(lines):
-        k = line.split(":", 1)[0]
-        if k in want:
-            lines[i] = f"{k}:{want[k]}"
-            seen.add(k)
-    lines += [f"{k}:{v}" for k, v in want.items() if k not in seen]
-    GAME.mkdir(parents=True, exist_ok=True)
-    p.write_text("\n".join(lines) + "\n", "utf-8")
 
 
 def fabric_id(mc):
@@ -542,171 +465,222 @@ def fabric_id(mc):
 
 
 # ---------- интерфейс ----------
-def cores_word(n):
-    return "ядро" if n % 10 == 1 and n % 100 != 11 else "ядра" if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else "ядер"
+def open_folder(path):
+    """Открывает папку в проводнике (создаёт, если её ещё нет)."""
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        if os.name == "nt":
+            os.startfile(str(path))
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+    except Exception as e:
+        log_file(f"не открылась папка {path}: {e!r}")
+
+
+_NEBULA = {}
+
+
+def nebula_base():
+    """Туманность без звёзд: рисуется один раз и потом растягивается под любой размер окна."""
+    if "img" not in _NEBULA:
+        import random
+        from PIL import Image, ImageChops, ImageDraw, ImageFilter
+        w, h = 960, 540
+        rnd = random.Random(7)
+        img = Image.new("RGB", (w, h), (4, 8, 7))
+        for color, n, rmin, rmax, blur in (((18, 84, 58), 9, 120, 280, 55), ((26, 150, 104), 6, 60, 160, 36),
+                                           ((110, 255, 175), 4, 22, 70, 18)):
+            layer = Image.new("RGB", (w, h), (0, 0, 0))
+            d = ImageDraw.Draw(layer)
+            for _ in range(n):
+                x, y, r = rnd.randint(w // 3, w), rnd.randint(0, h), rnd.randint(rmin, rmax)
+                d.ellipse((x - r, y - r // 2, x + r, y + r // 2), fill=color)
+            img = ImageChops.screen(img, layer.filter(ImageFilter.GaussianBlur(blur)).point(lambda v: int(v * 0.72)))
+        _NEBULA["img"] = img
+    return _NEBULA["img"]
+
+
+def _font(size, bold=False):
+    from PIL import ImageFont
+    for name in (("segoeuib.ttf" if bold else "segoeui.ttf"), "arialbd.ttf", "DejaVuSans-Bold.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            pass
+    try:
+        return ImageFont.load_default(size)
+    except TypeError:
+        return ImageFont.load_default()
 
 
 def make_background(w, h):
-    """Рисует туманность с звёздами и заголовок - картинка для фона окна."""
+    """Фон окна под текущий размер: туманность, звёзды, логотип и название справа."""
     import random
-    from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
-    rnd = random.Random(7)
-    img = Image.new("RGB", (w, h), (4, 8, 7))
-    for color, n, rmin, rmax, blur in (((18, 84, 58), 9, 140, 300, 60), ((26, 150, 104), 6, 70, 170, 38),
-                                       ((110, 255, 175), 4, 25, 80, 20)):
-        layer = Image.new("RGB", (w, h), (0, 0, 0))
-        d = ImageDraw.Draw(layer)
-        for _ in range(n):
-            x, y, r = rnd.randint(w // 3, w), rnd.randint(0, h), rnd.randint(rmin, rmax)
-            d.ellipse((x - r, y - r // 2, x + r, y + r // 2), fill=color)
-        img = ImageChops.screen(img, layer.filter(ImageFilter.GaussianBlur(blur)).point(lambda v: int(v * 0.72)))
+    from PIL import Image, ImageDraw
+    img = nebula_base().resize((w, h), Image.BILINEAR)
     d = ImageDraw.Draw(img)
-    for _ in range(140):
+    rnd = random.Random(7)
+    for _ in range(max(90, w * h // 9000)):
         x, y, v = rnd.randint(0, w - 1), rnd.randint(0, h - 1), rnd.randint(90, 255)
         d.point((x, y), fill=(v, v, v))
 
-    def font(size, bold=False):
-        for name in (("segoeuib.ttf" if bold else "segoeui.ttf"), "arialbd.ttf", "DejaVuSans-Bold.ttf"):
-            try:
-                return ImageFont.truetype(name, size)
-            except OSError:
-                pass
-        try:
-            return ImageFont.load_default(size)
-        except TypeError:
-            return ImageFont.load_default()
+    cx, cy = int(w * 0.69), int(h * 0.44)
+    logo_size = max(150, min(300, int(h * 0.30)))
+    logo = draw_logo(logo_size)
+    img.paste(logo, (cx - logo_size // 2, cy - logo_size // 2 - int(logo_size * 0.28)), logo)
 
-    d.text((438, 52), "MINECRAFT", font=font(62, True), fill=(236, 255, 246))
-    d.text((442, 128), "Fabric  ·  быстрый запуск", font=font(19), fill=(124, 255, 178))
+    title_font = _font(max(34, int(min(h * 0.085, w * 0.05))), True)
+    y = cy + int(logo_size * 0.30)
+    letters = list(APP_NAME.upper())
+    gap = int(title_font.size * 0.22)
+    widths = [d.textlength(c, font=title_font) for c in letters]
+    x = cx - (sum(widths) + gap * (len(letters) - 1)) / 2
+    for c, cw in zip(letters, widths):
+        d.text((x, y), c, font=title_font, fill=(236, 255, 246))
+        x += cw + gap
+    sub_font = _font(max(15, int(h * 0.026)))
+    sub = "Fabric  ·  быстрый запуск"
+    d.text((cx - d.textlength(sub, font=sub_font) / 2, y + int(title_font.size * 1.35)), sub,
+           font=sub_font, fill=(124, 255, 178))
     return img
 
 
 class App(ctk.CTk):
-    W, H = 880, 660
     ACCENT = "#7CFFB2"
     CARD = "#0b100e"
     FIELD = "#121a17"
     LINE = "#1c3a2c"
     MUTED = "#6b7f76"
+    CW = 356  # ширина полей в левой панели
 
     def __init__(self):
         super().__init__()
         ctk.set_appearance_mode("dark")
-        self.title("FastLauncher")
-        self.geometry(f"{self.W}x{self.H}")
-        self.resizable(False, False)
+        self.title(APP_NAME)
+        self.configure(fg_color="#040807")
+        try:
+            scale = self._get_window_scaling()
+        except Exception:
+            scale = 1.0
+        sw, sh = self.winfo_screenwidth() / scale, self.winfo_screenheight() / scale
+        w, h = int(min(1280, sw - 80)), int(min(800, sh - 110))
+        self.geometry(f"{w}x{h}+{int((sw - w) / 2 * scale)}+{int(max(0, (sh - h) / 3) * scale)}")
+        self.minsize(1000, 620)
+        self.fullscreen = False
+        self.bind("<F11>", lambda e: self.toggle_fullscreen())
+        self.bind("<Escape>", lambda e: self.toggle_fullscreen(False))
+        self.after(250, self.set_icon)
+
         self.conf = load_json(CONF, {"name": "Player", "version": DEFAULT_VERSION,
-                                     "tier": "auto", "extra": [], "tuned": "", "sig": "",
-                                     "source": "auto"})
+                                     "extra": [], "sig": "", "source": "auto"})
         MIRROR["allow"] = self.conf.get("source", "auto") != "official"
-        apply_proxy(self.conf.get("proxy", ""))
         self.mirror_names = set()
         NOTE["cb"] = self.on_mirror_note
-        self.hw = detect()
         self._max = 1
         self.proc = None
 
-        self.bg = ctk.CTkImage(make_background(self.W, self.H), size=(self.W, self.H))
-        ctk.CTkLabel(self, text="", image=self.bg).place(x=0, y=0, relwidth=1, relheight=1)
-        self.build_left()
-        self.build_right()
+        self.bg_label = tk.Label(self, bd=0, highlightthickness=0, bg="#040807")
+        self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+        self._bg_size = None
+        self._bg_job = None
+        self.bind("<Configure>", self.on_resize)
 
-    def card(self, x, y, w, h):
-        c = ctk.CTkFrame(self, width=w, height=h, corner_radius=0, fg_color=self.CARD,
-                         border_width=1, border_color=self.LINE)
-        c.place(x=x, y=y)
-        c.pack_propagate(False)
-        return c
+        self.build_panel()
+        self.build_corner()
 
+    # --- окно ---
+    def set_icon(self):
+        try:
+            self._icon = ImageTk.PhotoImage(draw_logo(64))
+            self.iconphoto(True, self._icon)
+        except Exception as e:
+            log_file(f"иконка окна: {e!r}")
+
+    def toggle_fullscreen(self, state=None):
+        self.fullscreen = (not self.fullscreen) if state is None else state
+        self.attributes("-fullscreen", self.fullscreen)
+        self.fs_btn.configure(text="Выйти из полного экрана  (Esc)" if self.fullscreen
+                              else "Во весь экран  (F11)")
+
+    def on_resize(self, event):
+        if event.widget is not self:
+            return
+        if self._bg_job:
+            self.after_cancel(self._bg_job)
+        self._bg_job = self.after(120, self.refresh_bg)
+
+    def refresh_bg(self):
+        self._bg_job = None
+        w, h = self.winfo_width(), self.winfo_height()
+        if w < 200 or h < 200 or (w, h) == self._bg_size:
+            return
+        self._bg_size = (w, h)
+        self._bg_photo = ImageTk.PhotoImage(make_background(w, h))
+        self.bg_label.configure(image=self._bg_photo)
+
+    # --- виджеты ---
     def field(self, parent, **kw):
-        return ctk.CTkEntry(parent, width=326, height=38, corner_radius=10, fg_color=self.FIELD,
+        return ctk.CTkEntry(parent, width=self.CW, height=40, corner_radius=10, fg_color=self.FIELD,
                             border_color="#1f3a2e", text_color="#e6f4ec", **kw)
-
-    def menu(self, parent, values, width=159):
-        return ctk.CTkOptionMenu(parent, width=width, height=36, corner_radius=10, values=values,
-                                 fg_color=self.FIELD, button_color="#1b3a2d", button_hover_color="#245a43",
-                                 dropdown_fg_color=self.FIELD, dropdown_hover_color="#1b3a2d",
-                                 text_color="#e6f4ec")
 
     def caption(self, parent, text):
         ctk.CTkLabel(parent, text=text, font=("Segoe UI", 11), text_color=self.MUTED).pack(anchor="w", padx=22)
 
-    def build_left(self):
-        card = self.card(28, 24, 370, 612)
-        ctk.CTkLabel(card, text="FASTLAUNCHER", font=("Segoe UI", 26, "bold"),
-                     text_color=self.ACCENT).pack(pady=(20, 0))
-        ctk.CTkLabel(card, text="авто-настройка под твой ПК", font=("Segoe UI", 12),
-                     text_color=self.MUTED).pack(pady=(0, 10))
+    def build_panel(self):
+        card = ctk.CTkFrame(self, width=400, corner_radius=18, fg_color=self.CARD,
+                            border_width=1, border_color=self.LINE)
+        card.place(x=56, rely=0.5, anchor="w")
 
-        hw = self.hw
-        gpu = (hw["gpu"].replace("NVIDIA GeForce ", "").replace("NVIDIA ", "").replace("AMD ", "")
-               .replace("(R)", "").replace("(TM)", ""))[:36]
-        for text in (f"  GPU   {gpu}",
-                     f"  RAM   {hw['ram']:.0f} ГБ   ·   {hw['cores']} {cores_word(hw['cores'])}",
-                     f"  Vulkan   {'да' if hw['vulkan'] else 'нет'}   ·   профиль {hw['tier'].upper()}"):
-            ctk.CTkLabel(card, text=text, width=326, height=26, anchor="w", corner_radius=8,
-                         fg_color="#102019", text_color="#bfe8d2", font=("Segoe UI", 12)).pack(pady=2)
+        head = ctk.CTkFrame(card, fg_color="transparent")
+        head.pack(pady=(22, 16))
+        self.logo_img = ctk.CTkImage(draw_logo(128), size=(46, 46))
+        ctk.CTkLabel(head, text="", image=self.logo_img).pack(side="left", padx=(0, 12))
+        ctk.CTkLabel(head, text=APP_NAME.upper(), font=("Segoe UI", 26, "bold"),
+                     text_color=self.ACCENT).pack(side="left")
 
         self.caption(card, "Ник")
         self.name = self.field(card)
         self.name.insert(0, self.conf["name"])
-        self.name.pack(pady=(0, 8))
+        self.name.pack(pady=(0, 10))
         self.caption(card, "Версия Minecraft")
         self.version = self.field(card)
         self.version.insert(0, self.conf["version"])
-        self.version.pack(pady=(0, 8))
+        self.version.pack(pady=(0, 10))
 
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack()
-        self.tier = self.menu(row, ["auto", "low", "mid", "high"])
-        self.tier.set(self.conf["tier"])
-        self.tier.pack(side="left", padx=(0, 8))
-        self.source = self.menu(row, list(SOURCES))
+        self.source = ctk.CTkOptionMenu(card, width=self.CW, height=38, corner_radius=10, values=list(SOURCES),
+                                        fg_color=self.FIELD, button_color="#1b3a2d", button_hover_color="#245a43",
+                                        dropdown_fg_color=self.FIELD, dropdown_hover_color="#1b3a2d",
+                                        text_color="#e6f4ec")
         back = {v: k for k, v in SOURCES.items()}
         self.source.set(back.get(self.conf.get("source", "auto"), "источник: авто"))
-        self.source.pack(side="left")
+        self.source.pack(pady=(0, 4))
 
-        self.proxy = self.field(card, placeholder_text="прокси (необязательно): http://127.0.0.1:10809")
-        if self.conf.get("proxy"):
-            self.proxy.insert(0, self.conf["proxy"])
-        self.proxy.pack(pady=(10, 0))
-
-        self.play = ctk.CTkButton(card, text="ИГРАТЬ", width=326, height=50, corner_radius=14,
-                                  font=("Segoe UI", 18, "bold"), fg_color=self.ACCENT, hover_color="#a6ffc9",
+        self.play = ctk.CTkButton(card, text="ИГРАТЬ", width=self.CW, height=54, corner_radius=14,
+                                  font=("Segoe UI", 19, "bold"), fg_color=self.ACCENT, hover_color="#a6ffc9",
                                   text_color="#04110a", command=self.on_play)
-        self.play.pack(pady=(12, 0))
-        self.bar = ctk.CTkProgressBar(card, width=326, height=8, progress_color=self.ACCENT, fg_color="#16211c")
+        self.play.pack(pady=(16, 0))
+        self.bar = ctk.CTkProgressBar(card, width=self.CW, height=8, progress_color=self.ACCENT, fg_color="#16211c")
         self.bar.set(0)
-        self.bar.pack(pady=(14, 6))
+        self.bar.pack(pady=(16, 6))
         self.status = ctk.CTkLabel(card, text="Готов к запуску", text_color="#9fb3a9", font=("Segoe UI", 12),
-                                   wraplength=326)
+                                   wraplength=self.CW)
         self.status.pack()
-        self.credit = ctk.CTkLabel(card, text="", text_color="#566860", font=("Segoe UI", 10), wraplength=326)
-        self.credit.pack(pady=(4, 0))
+        self.credit = ctk.CTkLabel(card, text="", text_color="#566860", font=("Segoe UI", 10),
+                                   wraplength=self.CW)
+        self.credit.pack(pady=(4, 20))
 
-    def build_right(self):
-        card = self.card(430, 446, 420, 190)
-        ctk.CTkLabel(card, text="Моды", font=("Segoe UI", 18, "bold"), text_color=self.ACCENT).pack(
-            anchor="w", padx=22, pady=(16, 0))
-        self.mods_label = ctk.CTkLabel(card, text="", font=("Segoe UI", 12), text_color="#bfe8d2",
-                                       justify="left", anchor="w", wraplength=376)
-        self.mods_label.pack(anchor="w", padx=22, pady=(4, 8))
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(padx=22, fill="x")
-        self.mod = ctk.CTkEntry(row, width=250, height=36, corner_radius=10, fg_color=self.FIELD,
-                                border_color="#1f3a2e", placeholder_text="slug мода, например: modmenu")
-        self.mod.pack(side="left")
-        ctk.CTkButton(row, text="Установить", width=110, height=36, corner_radius=10, fg_color="#1b3a2d",
-                      hover_color="#245a43", text_color="#e6f4ec", command=self.on_add_mod).pack(side="left", padx=(8, 0))
-        ctk.CTkLabel(card, text="Можно ставить и во время игры, мод заработает после её перезапуска.",
-                     font=("Segoe UI", 11), text_color=self.MUTED, wraplength=376, justify="left").pack(
-            anchor="w", padx=22, pady=(10, 0))
-        self.refresh_mods()
-
-    def refresh_mods(self):
-        names = sorted(load_json(MODS_JSON, {}))
-        self.mods_label.configure(text="  ·  ".join(names) if names else
-                                  "Пока пусто: нужные моды появятся после первого запуска.")
+    def build_corner(self):
+        ctk.CTkButton(self, text="Открыть папку Minecraft", width=220, height=40, corner_radius=12,
+                      font=("Segoe UI", 13), fg_color="#10201a", hover_color="#1b3a2d", text_color="#bfe8d2",
+                      border_width=1, border_color=self.LINE,
+                      command=lambda: open_folder(GAME)).place(x=56, rely=1.0, y=-28, anchor="sw")
+        self.fs_btn = ctk.CTkButton(self, text="Во весь экран  (F11)", width=230, height=36, corner_radius=12,
+                                    font=("Segoe UI", 12), fg_color="#10201a", hover_color="#1b3a2d",
+                                    text_color="#bfe8d2", border_width=1, border_color=self.LINE,
+                                    command=self.toggle_fullscreen)
+        self.fs_btn.place(relx=1.0, x=-28, y=24, anchor="ne")
 
     # --- помощники ---
     def ui(self, fn):
@@ -732,11 +706,9 @@ class App(ctk.CTk):
     # --- запуск ---
     def on_play(self):
         self.conf.update(name=self.name.get().strip() or "Player",
-                         version=self.version.get().strip() or DEFAULT_VERSION, tier=self.tier.get(),
+                         version=self.version.get().strip() or DEFAULT_VERSION,
                          source=SOURCES[self.source.get()])
         MIRROR["allow"] = self.conf["source"] != "official"
-        self.conf["proxy"] = self.proxy.get().strip()
-        apply_proxy(self.conf["proxy"])
         save_json(CONF, self.conf)
         self.play.configure(state="disabled")
         threading.Thread(target=self.work, daemon=True).start()
@@ -744,8 +716,6 @@ class App(ctk.CTk):
     def work(self):
         try:
             mc, name = self.conf["version"], self.conf["name"]
-            tier = self.hw["tier"] if self.conf["tier"] == "auto" else self.conf["tier"]
-            t = TIERS[tier]
 
             src = self.conf.get("source", "auto")
             MIRROR["game"] = False
@@ -763,32 +733,24 @@ class App(ctk.CTk):
 
             # моды ставим только если что-то изменилось - так запуск быстрее
             skipped = []
-            primary, fallback = plan_mods(tier, self.hw["vulkan"])
             extra = self.conf.get("extra", [])
-            sig = f"{mc}|{','.join(sorted(primary + extra))}"
+            mods = OPT_MODS + [m for m in extra if m not in OPT_MODS]
+            sig = f"{mc}|{','.join(sorted(mods))}"
             if sig != self.conf.get("sig"):
-                self.say("Подбираю моды под твой ПК...")
-                missing = sync_mods(primary + extra, mc, self.say)
-                if primary != fallback and "vulkanmod" in missing:
-                    self.say("VulkanMod для этой версии недоступен, ставлю Sodium...")
-                    missing = sync_mods(fallback + extra, mc, self.say)
+                self.say("Проверяю моды...")
+                missing = sync_mods(mods, mc, self.say)
                 if not missing:
                     self.conf["sig"] = sig  # иначе в следующий раз попробуем докачать
                 skipped = missing
-
-            if self.conf.get("tuned") != tier:
-                apply_options(tier)
-                self.conf["tuned"] = tier
             save_json(CONF, self.conf)
 
-            xmx = min(t["xmx"], int(self.hw["ram"] * 1024 * 0.5))
+            xmx = max(1024, min(4096, int(ram_gb() * 1024 * 0.5)))
             opts = {"username": name,
                     "uuid": str(uuid.uuid3(uuid.NAMESPACE_OID, "OfflinePlayer:" + name)),
                     "token": "",
                     "jvmArguments": [f"-Xmx{xmx}M", f"-Xms{min(xmx, 1024)}M"] + JVM_FLAGS}
             cmd = mll.command.get_minecraft_command(vid, GAME, opts)
             self.say("Запускаю игру...")
-            self.ui(self.refresh_mods)
             self.ui(lambda: self.bar.set(1))
             self.proc = subprocess.Popen(cmd, cwd=GAME, creationflags=0x08000000 if os.name == "nt" else 0)
             self.say("Игра запущена" + (f" (без модов: {', '.join(skipped)} - не скачались; причина: {FAIL.get(skipped[0], '?')})" if skipped else ""))
@@ -810,31 +772,6 @@ class App(ctk.CTk):
             self.say("Официальные серверы не отвечают, перехожу на зеркало...")
             enable_game_mirror()
             retry(run, self.say, tries=6)
-
-    # --- установка мода ---
-    def on_add_mod(self):
-        slug = self.mod.get().strip().lower()
-        if not slug:
-            return
-
-        def job():
-            try:
-                mods_dir = GAME / "mods"
-                mods_dir.mkdir(parents=True, exist_ok=True)
-                manifest = load_json(MODS_JSON, {})
-                if install_mod(slug, self.conf["version"], manifest, mods_dir, self.say):
-                    save_json(MODS_JSON, manifest)
-                    if slug not in self.conf["extra"]:
-                        self.conf["extra"].append(slug)
-                        save_json(CONF, self.conf)
-                    self.say(f"Мод {slug} установлен. Заработает после перезапуска игры")
-                    self.ui(self.refresh_mods)
-                else:
-                    self.say(f"Мод {slug} не найден для {self.conf['version']}")
-            except Exception as e:
-                self.say(f"Ошибка мода: {e}")
-
-        threading.Thread(target=job, daemon=True).start()
 
 
 if __name__ == "__main__":
