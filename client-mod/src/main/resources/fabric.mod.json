@@ -1,0 +1,20 @@
+{
+	"schemaVersion": 1,
+	"id": "enchanted_client",
+	"version": "2.0.0",
+	"name": "Enchanted Client",
+	"description": "Встроенное меню Enchanted (левый Shift): Target ESP, Hit Color, Custom Sky, настройки графики.",
+	"authors": ["Enchanted"],
+	"license": "CC0-1.0",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["dev.enchanted.client.EnchantedClient"]
+	},
+	"mixins": ["enchanted-client.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.16.0",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
