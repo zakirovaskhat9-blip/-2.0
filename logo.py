@@ -44,3 +44,50 @@ def draw_logo(size=512):
                                           outline=(40, 120, 86, 255), width=6)
     img.putalpha(bg)
     return img.resize((size, size), Image.LANCZOS)
+
+
+def draw_icon(size):
+    """Чёткая иконка для значка окна и панели задач: крупная плоская E без свечения на мелких размерах."""
+    S = 1024
+    small = size <= 48
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((6, 6, S - 6, S - 6), radius=210, fill=(9, 32, 24, 255),
+                        outline=(70, 210, 150, 255), width=34 if small else 20)
+    w = 170 if small else 140
+    x0, x1, y0, y1 = 262, 762, 196, 828
+    r = w // 6
+    letter = Image.new("L", (S, S), 0)
+    ld = ImageDraw.Draw(letter)
+    ld.rounded_rectangle((x0, y0, x0 + w, y1), radius=r, fill=255)
+    ld.rounded_rectangle((x0, y0, x1, y0 + w), radius=r, fill=255)
+    ld.rounded_rectangle((x0, 512 - w // 2, x1 - 70, 512 + w // 2), radius=r, fill=255)
+    ld.rounded_rectangle((x0, y1 - w, x1, y1), radius=r, fill=255)
+    if not small:
+        halo = Image.new("RGBA", (S, S), (124, 255, 178, 255))
+        halo.putalpha(letter.filter(ImageFilter.GaussianBlur(26)).point(lambda v: int(v * 0.6)))
+        img = Image.alpha_composite(img, halo)
+    body = Image.new("RGBA", (S, S), (232, 255, 244, 255))
+    body.putalpha(letter)
+    img = Image.alpha_composite(img, body)
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def make_ico(path):
+    """Пишет .ico, где каждый размер нарисован отдельно (а не уменьшен из одной картинки)."""
+    import io
+    import struct
+    sizes = (16, 20, 24, 32, 40, 48, 64, 128, 256)
+    blobs = []
+    for s in sizes:
+        b = io.BytesIO()
+        draw_icon(s).save(b, "PNG")
+        blobs.append(b.getvalue())
+    head = struct.pack("<HHH", 0, 1, len(sizes))
+    off = 6 + 16 * len(sizes)
+    ent = b""
+    for s, data in zip(sizes, blobs):
+        ent += struct.pack("<BBBBHHII", s % 256, s % 256, 0, 0, 1, 32, len(data), off)
+        off += len(data)
+    with open(path, "wb") as f:
+        f.write(head + ent + b"".join(blobs))

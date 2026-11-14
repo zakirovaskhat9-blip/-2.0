@@ -22,7 +22,7 @@ import psutil
 import requests
 from PIL import ImageTk
 
-from logo import draw_logo
+from logo import draw_icon, draw_logo, make_ico
 
 APP_NAME = "Enchanted"
 _BASE = Path(os.environ["APPDATA"]) if os.name == "nt" else Path.home()
@@ -625,7 +625,7 @@ class App(ctk.CTk):
         sw, sh = self.winfo_screenwidth() / self.scale, self.winfo_screenheight() / self.scale
         w, h = int(min(1280, sw - 80)), int(min(820, sh - 110))
         self.geometry(f"{w}x{h}+{int((sw - w) / 2 * self.scale)}+{int(max(0, (sh - h) / 3) * self.scale)}")
-        self.minsize(1000, 640)
+        self.resizable(False, False)  # размер фиксирован: без растягивания мышкой и кнопки "развернуть"
         self.fullscreen = False
         self.bind("<F11>", lambda e: self.toggle_fullscreen())
         self.bind("<Escape>", lambda e: self.toggle_fullscreen(False))
@@ -662,13 +662,13 @@ class App(ctk.CTk):
     def set_icon(self):
         try:
             ROOT.mkdir(parents=True, exist_ok=True)
-            ico = ROOT / "enchanted.ico"
+            ico = ROOT / "enchanted2.ico"
             if not ico.exists():
-                draw_logo(256).save(ico, sizes=[(256, 256), (64, 64), (48, 48), (32, 32), (16, 16)])
+                make_ico(str(ico))
             if os.name == "nt":
                 self.iconbitmap(str(ico))  # до этого вызова customtkinter ставит свой значок
             else:
-                self._icon = ImageTk.PhotoImage(draw_logo(64))
+                self._icon = ImageTk.PhotoImage(draw_icon(64))
                 self.iconphoto(True, self._icon)
         except Exception as e:
             log_file(f"иконка окна: {e!r}")
