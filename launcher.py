@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import tkinter as tk
 import time
 import urllib.error
@@ -410,11 +411,52 @@ def install_mod(slug, mc, manifest, mods_dir, log):
     return install_mod_modrinth(slug, mc, manifest, mods_dir, log)
 
 
+NETCHK = {}
+CLIENT_MOD_VERSIONS = ("1.21.11",)  # для каких версий игры есть встроенный клиентский мод (GUI на левый Shift)
+
+
+def modrinth_alive():
+    """Один раз за запуск проверяет Modrinth и зеркало (до 5 с). Нет связи - дальше идём с теми модами, что уже есть."""
+    if DEAD["net"]:
+        return False
+    if "alive" not in NETCHK:
+        base = "https://api.modrinth.com/v2/"
+        urls = [base] + [dst + base[len(src):] for src, dst in MOD_RULES if base.startswith(src)]
+        with ThreadPoolExecutor(len(urls)) as ex:
+            NETCHK["alive"] = any(ex.map(lambda u: reachable(u, 5), urls))
+        if not NETCHK["alive"]:
+            DEAD["net"] = True
+    return NETCHK["alive"]
+
+
+def client_mod_src():
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return base / "client_mod" / "enchanted-client.jar"
+
+
+def install_client_mod(mc, mods_dir, log):
+    """Встроенный клиентский мод Enchanted (меню на левый Shift): копируется из самого лаунчера."""
+    dest = mods_dir / "enchanted-client.jar"
+    src = client_mod_src()
+    if mc not in CLIENT_MOD_VERSIONS:
+        dest.unlink(missing_ok=True)
+        return
+    if not src.is_file():
+        log_file("встроенный клиентский мод не найден в лаунчере")
+        return
+    if not dest.exists() or dest.stat().st_size != src.stat().st_size or dest.read_bytes() != src.read_bytes():
+        shutil.copyfile(src, dest)
+
+
 FABRIC_API_ID = "P7dR8mSH"
 
 
 def install_mod_modrinth(slug, mc, manifest, mods_dir, log, key=None, depth=0):
     key = key or slug
+    if not modrinth_alive():
+        FAIL[slug] = "нет связи с Modrinth"
+        log(f"{slug}: нет связи с Modrinth, пропускаю")
+        return False
     q = urllib.parse.urlencode({"loaders": json.dumps(["fabric"]), "game_versions": json.dumps([mc])})
     versions = get_json(f"https://api.modrinth.com/v2/project/{slug}/version?{q}")
     if not versions:
@@ -487,6 +529,10 @@ def sync_mods(slugs, mc, log):
             log_file(f"мод {slug}: {e!r}")
             missing.append(slug)
     save_json(manifest_path(mc), manifest)
+    try:
+        install_client_mod(mc, mods_dir, log)
+    except Exception as e:
+        log_file(f"клиентский мод: {e!r}")
     return missing
 
 
@@ -826,6 +872,7 @@ class App(ctk.CTk):
             src = self.conf.get("source", "auto")
             MIRROR["game"] = False
             DEAD["net"] = False
+            NETCHK.clear()
             self.say("Проверяю доступ к серверам...")
             if src == "mirror" or (src == "auto" and not reachable("https://piston-meta.mojang.com/")):
                 enable_game_mirror()
