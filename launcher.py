@@ -295,7 +295,7 @@ def ram_gb():
 # ---------- моды без Modrinth: локальная папка и GitHub Release ----------
 GH_REPO = "__GH_REPO__"  # при сборке на GitHub подставляется имя этого репозитория (владелец/репо)
 GH_CACHE = {}
-PINS = {"1.21.11": {"sodium": "0.8.12"}}  # версия игры -> {slug: версия}; Voxy требует Sodium <= 0.8.12
+PINS = {}  # версия игры -> {slug: версия}, например {"1.21.11": {"sodium": "0.8.12"}}
 
 
 def pin_ok(slug, mc, *texts):
@@ -481,9 +481,10 @@ def sync_mods(slugs, mc, log):
 
 # Набор модов: ставится всегда
 OPT_MODS = ["fabric-api", "sodium", "lithium", "ferrite-core", "modernfix",
-            "immediatelyfast", "memoryleakfix", "voxy", "modmenu",
+            "immediatelyfast", "memoryleakfix", "modmenu",
             "ebe", "cull-leaves", "moreculling", "entityculling",
-            "immersive-optimization", "too-many-entities", "entityopt"]
+            "immersive-optimization", "too-many-entities", "entityopt",
+            "c2me-fabric", "async", "iris", "ggtu"]
 
 
 def fabric_id(mc):
