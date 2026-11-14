@@ -22,4 +22,7 @@
   <ItemGroup Condition="Exists('client_mod/enchanted-client.jar')">
     <EmbeddedResource Include="client_mod/enchanted-client.jar" LogicalName="enchanted-client.jar" />
   </ItemGroup>
+  <ItemGroup>
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
 </Project>
