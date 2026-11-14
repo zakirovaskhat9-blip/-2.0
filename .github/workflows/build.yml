@@ -1,4 +1,4 @@
-name: Build launcher.exe
+name: Build Enchanted.exe
 
 on:
   push:
@@ -10,24 +10,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.8.2"
+
+      - name: Собрать клиентский мод
+        shell: pwsh
+        working-directory: client-mod
+        run: |
+          gradle build --no-daemon
+          New-Item -ItemType Directory -Force -Path ../Enchanted/client_mod | Out-Null
+          Get-ChildItem build/libs/enchanted-client-*.jar | Where-Object { $_.Name -notmatch 'sources|dev' } | Select-Object -First 1 | Copy-Item -Destination ../Enchanted/client_mod/enchanted-client.jar
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
+      - name: Иконка
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+          pip install pillow
+          cd tools
+          python make_icon.py ../Enchanted/enchanted.ico
 
-      - name: Подставить имя репозитория (для скачивания модов из Releases)
-        shell: pwsh
-        run: (Get-Content launcher.py -Encoding UTF8) -replace '__GH_REPO__', $env:GITHUB_REPOSITORY | Set-Content launcher.py -Encoding UTF8
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
 
-      - name: Build exe
-        run: pyinstaller --onefile --noconsole --name FastLauncher --collect-all customtkinter launcher.py
+      - name: Собрать лаунчер
+        run: dotnet publish Enchanted/Enchanted.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FastLauncher
-          path: dist/FastLauncher.exe
-
+          name: Enchanted
+          path: publish/Enchanted.exe
