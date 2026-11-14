@@ -8,11 +8,11 @@ on:
   workflow_dispatch:
     inputs:
       mc_version:
-        description: "Версия Minecraft"
-        default: "1.21.11"
+        description: "Версии Minecraft (через пробел)"
+        default: "1.21.11 1.21.4"
       mods:
-        description: "Моды (slug через пробел; slug@версия - закрепить версию)"
-        default: "fabric-api sodium@0.8.12 lithium ferrite-core modernfix immediatelyfast memoryleakfix voxy modmenu ebe cull-leaves moreculling entityculling immersive-optimization too-many-entities entityopt"
+        description: "Моды (slug через пробел; slug@версия_мода или slug@версия_игры:версия_мода - закрепить версию)"
+        default: "fabric-api sodium lithium ferrite-core modernfix immediatelyfast memoryleakfix modmenu ebe cull-leaves moreculling entityculling immersive-optimization too-many-entities entityopt c2me-fabric async iris ggtu"
 
 permissions:
   contents: write
@@ -21,16 +21,17 @@ jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
-      - name: Скачать моды с Modrinth
+      - name: Скачать моды и опубликовать в Release
         env:
-          MC: ${{ inputs.mc_version }}
+          GH_TOKEN: ${{ github.token }}
+          MC_LIST: ${{ inputs.mc_version }}
           MODS: ${{ inputs.mods }}
         run: |
-          python3 - <<'PY'
+          cat > fetch.py <<'PY'
           import hashlib, json, os, re, sys, urllib.parse, urllib.request
           mc = os.environ["MC"]
           os.makedirs("mods", exist_ok=True)
-          H = {"User-Agent": "FastLauncher-mods-fetch"}
+          H = {"User-Agent": "Enchanted-mods-fetch"}
 
           def get(url):
               return urllib.request.urlopen(urllib.request.Request(url, headers=H), timeout=60)
@@ -66,6 +67,10 @@ jobs:
 
           for token in os.environ["MODS"].split():
               slug, _, pin = token.partition("@")
+              if ":" in pin:  # версия_игры:версия_мода - закрепление только для этой версии игры
+                  pmc, _, pin = pin.partition(":")
+                  if pmc != mc:
+                      pin = ""
               try:
                   q = urllib.parse.urlencode({"loaders": json.dumps(["fabric"]), "game_versions": json.dumps([mc])})
                   v = newest(api(f"/project/{slug}/version?{q}"), pin)
@@ -104,14 +109,18 @@ jobs:
               print("::error::Ни один мод не скачался")
               sys.exit(1)
           PY
-
-      - name: Опубликовать в Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          MC: ${{ inputs.mc_version }}
-        run: |
-          TAG="mods-$MC"
-          # пересоздаём релиз, чтобы старые версии не остались рядом с новыми
-          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag >/dev/null 2>&1 || true
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Моды $MC" --notes "Моды для FastLauncher ($MC)"
-          gh release upload "$TAG" mods/*.jar index.json --repo "$GITHUB_REPOSITORY" --clobber
+          rc=0
+          for MC in $MC_LIST; do
+            echo "=== Minecraft $MC ==="
+            rm -rf mods index.json
+            if MC="$MC" python3 fetch.py; then
+              TAG="mods-$MC"
+              # пересоздаём релиз, чтобы старые версии не остались рядом с новыми
+              gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag >/dev/null 2>&1 || true
+              gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Моды $MC" --notes "Моды для Enchanted ($MC)"
+              gh release upload "$TAG" mods/*.jar index.json --repo "$GITHUB_REPOSITORY" --clobber
+            else
+              rc=1
+            fi
+          done
+          exit $rc
