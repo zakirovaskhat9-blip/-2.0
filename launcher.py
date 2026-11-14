@@ -407,16 +407,14 @@ def install_mod(slug, mc, manifest, mods_dir, log):
                 (mods_dir / old).unlink(missing_ok=True)
             manifest[slug] = name
             return True
-    index = gh_release(mc)[1]
-    if index and slug not in index.get("mods", {}) and slug not in index.get("deps", {}):
-        # релиз для этой версии есть, но мода в нём нет: под эту версию его нет (или нужно заново запустить Fetch mods)
-        FAIL[slug] = f"нет версии под {mc} (в релизе mods-{mc} его нет)"
-        log(f"{slug}: нет версии под {mc}")
-        return False
     return install_mod_modrinth(slug, mc, manifest, mods_dir, log)
 
 
-def install_mod_modrinth(slug, mc, manifest, mods_dir, log):
+FABRIC_API_ID = "P7dR8mSH"
+
+
+def install_mod_modrinth(slug, mc, manifest, mods_dir, log, key=None, depth=0):
+    key = key or slug
     q = urllib.parse.urlencode({"loaders": json.dumps(["fabric"]), "game_versions": json.dumps([mc])})
     versions = get_json(f"https://api.modrinth.com/v2/project/{slug}/version?{q}")
     if not versions:
@@ -434,7 +432,7 @@ def install_mod_modrinth(slug, mc, manifest, mods_dir, log):
     files = versions[0]["files"]
     f = next((x for x in files if x.get("primary")), files[0])
     dest = mods_dir / f["filename"]
-    old = manifest.get(slug)
+    old = manifest.get(key)
     if old and old != f["filename"]:
         (mods_dir / old).unlink(missing_ok=True)
     if not dest.exists():
@@ -452,7 +450,20 @@ def install_mod_modrinth(slug, mc, manifest, mods_dir, log):
                 raise RuntimeError("хеш файла не совпал")
             os.replace(tmp, dest)
         retry(download, log, tries=2)
-    manifest[slug] = f["filename"]
+    manifest[key] = f["filename"]
+    # обязательные зависимости (Cloth Config, Architectury и т.п.) - они хранятся в манифесте как "dep:<slug>"
+    if depth < 2:
+        for d in versions[0].get("dependencies", []):
+            pid = d.get("project_id")
+            if d.get("dependency_type") != "required" or not pid or pid == FABRIC_API_ID:
+                continue
+            try:
+                dslug = get_json(f"https://api.modrinth.com/v2/project/{pid}")["slug"]
+                if dslug in manifest or "dep:" + dslug in manifest:
+                    continue
+                install_mod_modrinth(dslug, mc, manifest, mods_dir, log, key="dep:" + dslug, depth=depth + 1)
+            except Exception as e:
+                log_file(f"зависимость {pid} для {slug}: {e!r}")
     return True
 
 
@@ -463,7 +474,7 @@ def sync_mods(slugs, mc, log):
     manifest = load_json(manifest_path(mc), {})
     slugs = list(slugs) + [d for d in gh_deps(mc) if d not in slugs]
     for slug in list(manifest):
-        if slug not in slugs:
+        if slug not in slugs and not slug.startswith("dep:"):
             (mods_dir / manifest.pop(slug)).unlink(missing_ok=True)
     missing = []
     for slug in slugs:
