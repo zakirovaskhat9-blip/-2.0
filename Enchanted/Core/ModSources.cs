@@ -139,9 +139,15 @@ public sealed class ModManager
     readonly Config cfg;
     public ModManager(HttpClient http, Config cfg) { this.http = http; this.cfg = cfg; }
 
-    static readonly Brush Green = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
-    static readonly Brush Blue = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A));
-    static readonly Brush Red = new SolidColorBrush(Color.FromRgb(0x5A, 0x5A, 0x5A));
+    static Brush Fz(byte r, byte g, byte b)
+    {
+        var br = new SolidColorBrush(Color.FromRgb(r, g, b));
+        br.Freeze(); // заморожена - можно использовать из любого потока
+        return br;
+    }
+    static readonly Brush Green = Fz(0xF2, 0xF2, 0xF2);
+    static readonly Brush Blue = Fz(0x9A, 0x9A, 0x9A);
+    static readonly Brush Red = Fz(0x5A, 0x5A, 0x5A);
 
     async Task<bool> Ping(string url, int sec)
     {
