@@ -126,6 +126,7 @@ public sealed class GameService
 
         // моды
         InstallClientMod(mc);
+        if (mc == "1.21.11") Skies.Seed();
         var mods = new ModManager(Http, cfg);
         int missing = await mods.EnsureAsync(mc, status, row, ct);
 

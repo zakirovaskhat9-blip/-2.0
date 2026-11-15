@@ -42,6 +42,7 @@ public partial class MainWindow : Window
     void OpenGame_Click(object s, RoutedEventArgs e) => Open(Dirs.Game(Mc));
     void OpenMods_Click(object s, RoutedEventArgs e) => Open(Dirs.Mods(Mc));
     void OpenPacks_Click(object s, RoutedEventArgs e) => Open(Dirs.ResourcePacks(Mc));
+    void OpenSkies_Click(object s, RoutedEventArgs e) { Skies.Seed(); Open(Skies.Dir()); }
 
     async void Play_Click(object s, RoutedEventArgs e)
     {

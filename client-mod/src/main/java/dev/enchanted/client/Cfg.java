@@ -65,7 +65,7 @@ public final class Cfg {
 	}
 
 	public static final class Choice extends Setting {
-		final String[] opts;
+		String[] opts;
 		public int idx;
 		Choice(String id, String name, int def, String... opts) { super(id, name); this.opts = opts; this.idx = def; }
 		double get() { return idx; }
@@ -87,14 +87,15 @@ public final class Cfg {
 	static final String VIS = "Visuals", REN = "Render";
 
 	// ---- Target ESP ----
-	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 1, "Рамка", "Углы");
+	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 1, "Рамка", "Углы", "Заливка", "Скобки", "Ромб", "Кольцо", "Орбита", "Стрелка", "Перекрестие");
 	public static final Color ESP_COLOR = new Color("color", "Цвет", RAINBOW);
 	public static final Bool ESP_HP = new Bool("hp", "Полоска здоровья", true);
 	public static final Bool ESP_NAME = new Bool("name", "Ник цели", true);
 	public static final Slider ESP_TIME = new Slider("time", "Держать после удара", 1, 10, 1, 4, " с");
+	public static final Bool ESP_ANIM = new Bool("anim", "Анимация (пульс)", true);
 	public static final Bool ESP_AIM = new Bool("aim", "Также при наведении", false);
 	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Метка на цели боя", VIS, true,
-			ESP_STYLE, ESP_COLOR, ESP_HP, ESP_NAME, ESP_TIME, ESP_AIM);
+			ESP_STYLE, ESP_COLOR, ESP_ANIM, ESP_HP, ESP_NAME, ESP_TIME, ESP_AIM);
 
 	// ---- Hit Color ----
 	public static final Color HIT_COLOR = new Color("color", "Цвет удара", 1);
@@ -103,12 +104,13 @@ public final class Cfg {
 			.apply(() -> HitColor.refresh());
 
 	// ---- Custom Sky ----
+	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
 	public static final Color SKY_COLOR = new Color("sky", "Цвет неба", 8);
 	public static final Bool SKY_FOG = new Bool("fog", "Туман в цвет неба", true);
 	public static final Color SKY_CLOUD = new Color("cloud", "Цвет облаков", 9);
 	public static final Bool SKY_STARS = new Bool("stars", "Звёзды всегда", true);
-	public static final Module SKY = new Module("sky", "Custom Sky", "Свои цвета неба, тумана и облаков", VIS, false,
-			SKY_COLOR, SKY_FOG, SKY_CLOUD, SKY_STARS);
+	public static final Module SKY = new Module("sky", "Custom Sky", "Готовые и свои небеса, анимация", VIS, false,
+			SKY_PRESET, SKY_COLOR, SKY_FOG, SKY_CLOUD, SKY_STARS);
 
 	// ---- обычные настройки ----
 	public static final Slider FOV_V = new Slider("fov", "FOV", 30, 110, 1, 90, "");

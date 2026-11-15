@@ -53,14 +53,59 @@ public final class Hud {
 		if (ix1 - ix0 > sw * 2 || iy1 - iy0 > sh * 2) return;
 		int col = 0xFF000000 | Cfg.ESP_COLOR.rgb();
 
-		if (Cfg.ESP_STYLE.idx == 0) {
-			box(g, ix0, iy0, ix1, iy1, col);
-		} else {
-			int len = Math.max(4, Math.min(ix1 - ix0, iy1 - iy0) / 4);
-			corner(g, ix0, iy0, len, 1, 1, col);
-			corner(g, ix1, iy0, len, -1, 1, col);
-			corner(g, ix0, iy1, len, 1, -1, col);
-			corner(g, ix1, iy1, len, -1, -1, col);
+		float pulse = Cfg.ESP_ANIM.v ? 0.72f + 0.28f * (float) Math.sin(now / 170.0) : 1f;
+		int pc = (col & 0xFFFFFF) | ((int) (255 * pulse) << 24);
+		double cx = (ix0 + ix1) / 2.0, cy = (iy0 + iy1) / 2.0, rx = (ix1 - ix0) / 2.0, ry = (iy1 - iy0) / 2.0;
+		int len = Math.max(4, Math.min(ix1 - ix0, iy1 - iy0) / 4);
+		switch (Cfg.ESP_STYLE.idx) {
+			case 0 -> box(g, ix0, iy0, ix1, iy1, pc);
+			case 1 -> {
+				corner(g, ix0, iy0, len, 1, 1, pc);
+				corner(g, ix1, iy0, len, -1, 1, pc);
+				corner(g, ix0, iy1, len, 1, -1, pc);
+				corner(g, ix1, iy1, len, -1, -1, pc);
+			}
+			case 2 -> {
+				g.fill(ix0, iy0, ix1, iy1, (col & 0xFFFFFF) | ((int) (70 * pulse) << 24));
+				box(g, ix0, iy0, ix1, iy1, pc);
+			}
+			case 3 -> {
+				g.fill(ix0, iy0, ix0 + 1, iy1, pc);
+				g.fill(ix0, iy0, ix0 + len, iy0 + 1, pc);
+				g.fill(ix0, iy1 - 1, ix0 + len, iy1, pc);
+				g.fill(ix1 - 1, iy0, ix1, iy1, pc);
+				g.fill(ix1 - len, iy0, ix1, iy0 + 1, pc);
+				g.fill(ix1 - len, iy1 - 1, ix1, iy1, pc);
+			}
+			case 4 -> {
+				line(g, cx, iy0 - 2, ix1 + 2, cy, pc);
+				line(g, ix1 + 2, cy, cx, iy1 + 2, pc);
+				line(g, cx, iy1 + 2, ix0 - 2, cy, pc);
+				line(g, ix0 - 2, cy, cx, iy0 - 2, pc);
+			}
+			case 5 -> ellipse(g, cx, cy, rx + 3, ry + 3, pc, 90);
+			case 6 -> {
+				ellipse(g, cx, cy, rx + 3, ry + 3, (col & 0xFFFFFF) | 0x55000000, 90);
+				double a0 = now / 450.0;
+				for (int k = 0; k < 3; k++) {
+					double a = a0 + k * Math.PI * 2 / 3;
+					int dx = (int) (cx + Math.cos(a) * (rx + 3)), dy = (int) (cy + Math.sin(a) * (ry + 3));
+					g.fill(dx - 2, dy - 2, dx + 3, dy + 3, col);
+				}
+			}
+			case 7 -> {
+				int bob = (int) (Math.sin(now / 200.0) * 3);
+				int ay = iy0 - 26 + bob, ax = (int) cx;
+				for (int r = 0; r < 8; r++) g.fill(ax - (7 - r), ay + r, ax + (7 - r) + 1, ay + r + 1, pc);
+			}
+			default -> {
+				int gap = Math.max(3, len / 2);
+				g.fill((int) cx - len - gap, (int) cy, (int) cx - gap, (int) cy + 1, pc);
+				g.fill((int) cx + gap, (int) cy, (int) cx + len + gap, (int) cy + 1, pc);
+				g.fill((int) cx, (int) cy - len - gap, (int) cx + 1, (int) cy - gap, pc);
+				g.fill((int) cx, (int) cy + gap, (int) cx + 1, (int) cy + len + gap, pc);
+				box(g, ix0, iy0, ix1, iy1, (col & 0xFFFFFF) | 0x44000000);
+			}
 		}
 		if (Cfg.ESP_HP.v) {
 			float hp = Math.max(0f, Math.min(1f, t.getHealth() / Math.max(1f, t.getMaxHealth())));
@@ -72,6 +117,22 @@ public final class Hud {
 		if (Cfg.ESP_NAME.v) {
 			String n = t.getName().getString();
 			g.drawString(mc.font, n, (ix0 + ix1) / 2 - mc.font.width(n) / 2, iy0 - 11, col);
+		}
+	}
+
+	private static void line(GuiGraphics g, double x0, double y0, double x1, double y1, int c) {
+		int n = (int) Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+		for (int i = 0; i <= n; i++) {
+			int x = (int) Math.round(x0 + (x1 - x0) * i / Math.max(1, n)), y = (int) Math.round(y0 + (y1 - y0) * i / Math.max(1, n));
+			g.fill(x, y, x + 1, y + 1, c);
+		}
+	}
+
+	private static void ellipse(GuiGraphics g, double cx, double cy, double rx, double ry, int c, int n) {
+		for (int i = 0; i < n; i++) {
+			double a = i * Math.PI * 2 / n;
+			int x = (int) Math.round(cx + Math.cos(a) * rx), y = (int) Math.round(cy + Math.sin(a) * ry);
+			g.fill(x, y, x + 1, y + 1, c);
 		}
 	}
 

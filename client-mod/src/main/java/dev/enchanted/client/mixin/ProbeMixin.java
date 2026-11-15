@@ -6,6 +6,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import dev.enchanted.client.Cfg;
+import dev.enchanted.client.SkyLib;
 import net.minecraft.world.attribute.EnvironmentAttribute;
 import net.minecraft.world.attribute.EnvironmentAttributeProbe;
 import net.minecraft.world.attribute.EnvironmentAttributes;
@@ -19,14 +20,15 @@ public abstract class ProbeMixin {
 		if (!Cfg.SKY.enabled) return;
 		Object orig = cir.getReturnValue();
 		Object res = null;
+		SkyLib.Def d = SkyLib.current(Cfg.SKY_PRESET.idx);
 		if (attr == EnvironmentAttributes.SKY_COLOR) {
-			res = paint(orig, Cfg.SKY_COLOR.rgb());
-		} else if (attr == EnvironmentAttributes.FOG_COLOR && Cfg.SKY_FOG.v) {
-			res = paint(orig, Cfg.SKY_COLOR.rgb());
+			res = paint(orig, d != null ? d.sky() : Cfg.SKY_COLOR.rgb());
+		} else if (attr == EnvironmentAttributes.FOG_COLOR && (d != null || Cfg.SKY_FOG.v)) {
+			res = paint(orig, d != null ? d.fog() : Cfg.SKY_COLOR.rgb());
 		} else if (attr == EnvironmentAttributes.CLOUD_COLOR) {
-			res = paint(orig, Cfg.SKY_CLOUD.rgb());
-		} else if (attr == EnvironmentAttributes.STAR_BRIGHTNESS && Cfg.SKY_STARS.v) {
-			res = Float.valueOf(1.0f);
+			res = paint(orig, d != null ? d.cloud() : Cfg.SKY_CLOUD.rgb());
+		} else if (attr == EnvironmentAttributes.STAR_BRIGHTNESS && (d != null || Cfg.SKY_STARS.v)) {
+			res = Float.valueOf(d == null || d.stars ? 1.0f : 0.0f);
 		}
 		if (res != null) cir.setReturnValue((V) res);
 	}

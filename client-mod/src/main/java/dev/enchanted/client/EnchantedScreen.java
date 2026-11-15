@@ -9,7 +9,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
-/** Меню в стиле Lunar: боковая панель, карточки модулей с переключателями и шестерёнкой настроек. */
+/** Меню: боковая панель, карточки модулей с переключателями и шестерёнкой настроек. */
 public class EnchantedScreen extends Screen {
 	private static final int W = 540, H = 330, SIDE = 116;
 	private static final String[] TABS = {"Visuals", "Render", "Тема"};
@@ -35,6 +35,9 @@ public class EnchantedScreen extends Screen {
 	@Override
 	protected void init() {
 		Cfg.syncFromOptions();
+		SkyLib.scan(); // подхватить новые файлы из папки skies
+		Cfg.SKY_PRESET.opts = SkyLib.names();
+		if (Cfg.SKY_PRESET.idx >= Cfg.SKY_PRESET.opts.length) Cfg.SKY_PRESET.idx = 0;
 	}
 
 	// ---------- рисование ----------
@@ -197,10 +200,14 @@ public class EnchantedScreen extends Screen {
 				}
 				text(g, Cfg.CNAMES[c.idx], cx + 8, y + 15 - 1, GRAY);
 			} else if (s instanceof Cfg.Choice ch) {
-				rr(g, ctrlX + ctrlW - 110, y + 1, 110, 16, 5, 0xFF262626);
-				String v = "< " + ch.opts[ch.idx] + " >";
-				text(g, v, ctrlX + ctrlW - 55 - this.font.width(v) / 2, y + 5, ac);
-				hits.add(new Hit(ctrlX + ctrlW - 110, y + 1, 110, 16, () -> { ch.idx = (ch.idx + 1) % ch.opts.length; Cfg.changed(m); }));
+				int bw = 150, bx2 = ctrlX + ctrlW - bw;
+				rr(g, bx2, y + 1, bw, 16, 5, 0xFF262626);
+				String v = trim(ch.opts[Math.floorMod(ch.idx, ch.opts.length)], bw - 30);
+				text(g, "<", bx2 + 6, y + 5, ac);
+				text(g, ">", bx2 + bw - 11, y + 5, ac);
+				text(g, v, bx2 + bw / 2 - this.font.width(v) / 2, y + 5, WHITE);
+				hits.add(new Hit(bx2, y + 1, bw / 2, 16, () -> { ch.idx = Math.floorMod(ch.idx - 1, ch.opts.length); Cfg.changed(m); }));
+				hits.add(new Hit(bx2 + bw / 2, y + 1, bw / 2, 16, () -> { ch.idx = Math.floorMod(ch.idx + 1, ch.opts.length); Cfg.changed(m); }));
 			}
 			y += 30;
 		}
@@ -220,7 +227,7 @@ public class EnchantedScreen extends Screen {
 			final int idx = i;
 			hits.add(new Hit(x, y, w, 64, () -> { Cfg.theme = idx; Cfg.save(); }));
 		}
-		text(g, "Меню открывается левым Shift. Esc - закрыть.", cx, y + 84, GRAY);
+		text(g, "Меню открывается правым Shift. Esc - закрыть.", cx, y + 84, GRAY);
 	}
 
 	// ---------- ввод ----------

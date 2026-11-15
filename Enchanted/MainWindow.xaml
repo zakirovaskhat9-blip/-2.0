@@ -150,11 +150,12 @@
               <Button x:Name="PlayBtn" Style="{StaticResource Play}" Content="ИГРАТЬ" Click="Play_Click"/>
               <ProgressBar x:Name="Bar" Height="8" Margin="0,16,0,0" Minimum="0" Maximum="1" Foreground="#F2F2F2" Background="#1A1A1A" BorderThickness="0"/>
               <TextBlock x:Name="StatusText" Text="Готов к запуску" Foreground="#9A9A9A" Margin="2,10,0,16" TextWrapping="Wrap" MinHeight="36"/>
-              <StackPanel Orientation="Horizontal">
+              <WrapPanel>
                 <Button Style="{StaticResource Ghost}" Content="Minecraft" Click="OpenGame_Click"/>
                 <Button Style="{StaticResource Ghost}" Content="Моды" Click="OpenMods_Click"/>
                 <Button Style="{StaticResource Ghost}" Content="Ресурспаки" Click="OpenPacks_Click"/>
-              </StackPanel>
+                <Button Style="{StaticResource Ghost}" Content="Небеса" Click="OpenSkies_Click"/>
+              </WrapPanel>
             </StackPanel>
           </Grid>
         </Border>
