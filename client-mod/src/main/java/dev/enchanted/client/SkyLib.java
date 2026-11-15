@@ -19,7 +19,7 @@ public final class SkyLib {
 	public static final class Def {
 		final String name;
 		final int[] sky, fog, cloud;
-		final boolean stars;
+		public final boolean stars;
 		final double speed; // секунд на переход к следующему цвету
 
 		Def(String name, boolean stars, double speed, int[] sky, int[] fog, int[] cloud) {
@@ -27,9 +27,9 @@ public final class SkyLib {
 			this.sky = sky; this.fog = fog.length == 0 ? sky : fog; this.cloud = cloud.length == 0 ? sky : cloud;
 		}
 
-		int sky() { return sample(sky); }
-		int fog() { return sample(fog); }
-		int cloud() { return sample(cloud); }
+		public int sky() { return sample(sky); }
+		public int fog() { return sample(fog); }
+		public int cloud() { return sample(cloud); }
 
 		private int sample(int[] c) {
 			if (c.length == 1) return c[0];
