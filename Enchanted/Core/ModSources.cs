@@ -303,11 +303,25 @@ public sealed class ModManager
         Exception? last = null;
         foreach (var url in new[] { f.Url, f.Alt }.Where(u => u != null))
         {
-            for (int attempt = 0; attempt < 2; attempt++)
+            for (int attempt = 0; attempt < 3; attempt++)
             {
                 try
                 {
-                    var bytes = await http.GetByteArrayAsync(url!, ct);
+                    // 5 секунд тишины - обрыв и повтор (12 с на ответ сервера)
+                    using var sc = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    sc.CancelAfter(TimeSpan.FromSeconds(12));
+                    using var resp = await http.GetAsync(url!, HttpCompletionOption.ResponseHeadersRead, sc.Token);
+                    resp.EnsureSuccessStatusCode();
+                    using var stream = await resp.Content.ReadAsStreamAsync(sc.Token);
+                    var ms = new MemoryStream();
+                    var buf = new byte[81920];
+                    int n;
+                    while ((n = await stream.ReadAsync(buf, sc.Token)) > 0)
+                    {
+                        ms.Write(buf, 0, n);
+                        sc.CancelAfter(TimeSpan.FromSeconds(5));
+                    }
+                    var bytes = ms.ToArray();
                     if (f.Sha512 != null && !Convert.ToHexString(SHA512.HashData(bytes)).Equals(f.Sha512, StringComparison.OrdinalIgnoreCase))
                         throw new InvalidDataException("хеш SHA-512 не совпал");
                     if (f.Sha1 != null && f.Sha512 == null && !Convert.ToHexString(SHA1.HashData(bytes)).Equals(f.Sha1, StringComparison.OrdinalIgnoreCase))
