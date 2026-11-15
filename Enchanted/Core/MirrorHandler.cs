@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Enchanted;
 
 /// <summary>
@@ -20,6 +22,8 @@ public sealed class MirrorHandler : DelegatingHandler
     };
 
     static readonly SemaphoreSlim Gate = new(6); // одновременных рукопожатий/заголовков (защита от «шторма» TLS)
+
+    const string Log4j = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Configuration status=\"WARN\"><Appenders><Console name=\"SysOut\" target=\"SYSTEM_OUT\"><PatternLayout pattern=\"[%d{HH:mm:ss}] [%t/%level]: %msg%n\"/></Console></Appenders><Loggers><Root level=\"info\"><AppenderRef ref=\"SysOut\"/></Root></Loggers></Configuration>\n";
 
     public bool PreferMirror { get; set; } = true;
 
@@ -105,6 +109,13 @@ public sealed class MirrorHandler : DelegatingHandler
         }
 
         ct.ThrowIfCancellationRequested();
+        if (bad != null && Regex.IsMatch(orig.AbsolutePath, @"/client-[\d.]+\.xml$"))
+        {
+            // конфиг логирования log4j: на зеркале его нет, а Mojang недоступен - отдаём простой аналог (игре он не критичен)
+            Log.W("зеркало не имеет " + orig.AbsolutePath + ", подставлен стандартный log4j-конфиг");
+            bad.Dispose();
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(Log4j, System.Text.Encoding.UTF8, "application/xml"), RequestMessage = req };
+        }
         if (bad != null) { Log.W($"{orig.AbsolutePath}: " + string.Join(" | ", errors)); return bad; }
         throw new HttpRequestException($"Не удалось скачать {orig.Host}{orig.AbsolutePath} -> " + string.Join(" | ", errors));
     }
