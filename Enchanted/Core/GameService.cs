@@ -34,6 +34,64 @@ public sealed class GameService
         s.CopyTo(o);
     }
 
+    long lastTick = Environment.TickCount64;
+    volatile bool started;
+    void Touch() { Interlocked.Exchange(ref lastTick, Environment.TickCount64); started = true; }
+
+    /// <summary>
+    /// Выполняет загрузку; если 5 секунд нет ни байта прогресса - прерывает и запускает заново
+    /// (уже скачанные файлы CmlLib пропускает). До первого прогресса даём 20 с на подготовку.
+    /// </summary>
+    async Task Guard(Func<CancellationToken, Task> work, Action<string> status, CancellationToken ct)
+    {
+        int stalls = 0, errors = 0;
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            started = false;
+            Touch();
+            started = false;
+            bool stalled = false;
+            _ = Task.Run(async () =>
+            {
+                while (!cts.IsCancellationRequested)
+                {
+                    await Task.Delay(500).ConfigureAwait(false);
+                    long limit = started ? 5000 : 20000;
+                    if (Environment.TickCount64 - Interlocked.Read(ref lastTick) > limit)
+                    {
+                        stalled = true;
+                        try { cts.Cancel(); } catch { }
+                        return;
+                    }
+                }
+            });
+            try
+            {
+                await work(cts.Token).WaitAsync(cts.Token);
+                return;
+            }
+            catch (Exception e) when (!ct.IsCancellationRequested)
+            {
+                if (stalled)
+                {
+                    if (++stalls > 15) throw new IOException("сервер постоянно молчит, попробуй другой источник загрузки");
+                    Log.W($"загрузка встала, перезапуск #{stalls}");
+                    status($"Сервер молчит 5 с - перезапускаю загрузку (попытка {stalls})...");
+                }
+                else
+                {
+                    if (++errors > 3) throw;
+                    Log.W("ошибка загрузки, повтор: " + e.Message);
+                    status("Ошибка загрузки, повторяю...");
+                    await Task.Delay(1000, ct);
+                }
+            }
+            finally { try { cts.Cancel(); } catch { } }
+        }
+    }
+
     public async Task LaunchAsync(Action<string> status, Action<double> progress, Action<ModRow> row, CancellationToken ct)
     {
         var mc = cfg.Version;
@@ -44,8 +102,10 @@ public sealed class GameService
 
         var path = new MinecraftPath(Dirs.Root);
         var launcher = new MinecraftLauncher(MinecraftLauncherParameters.CreateDefault(path, Http));
+        launcher.ByteProgressChanged += (_, _) => Touch();
         launcher.FileProgressChanged += (_, e) =>
         {
+            Touch();
             if (e.TotalTasks > 0) progress((double)e.ProgressedTasks / e.TotalTasks);
             status($"Файлы игры: {e.ProgressedTasks}/{e.TotalTasks}");
         };
@@ -58,7 +118,9 @@ public sealed class GameService
         if (File.Exists(fabMarker) && !cfg.VerifyFiles) versionName = File.ReadAllText(fabMarker).Trim();
         else
         {
-            versionName = await new FabricInstaller(Http).Install(mc, path);
+            string vn = "";
+            await Guard(async t => { vn = await new FabricInstaller(Http).Install(mc, path); }, status, ct);
+            versionName = vn;
             File.WriteAllText(fabMarker, versionName);
         }
 
@@ -83,7 +145,9 @@ public sealed class GameService
         else
         {
             status("Проверяю и докачиваю файлы игры...");
-            proc = await launcher.InstallAndBuildProcessAsync(versionName, opt, ct);
+            Process? built = null;
+            await Guard(async t => { built = await launcher.InstallAndBuildProcessAsync(versionName, opt, t); }, status, ct);
+            proc = built!;
             File.WriteAllText(marker, versionName);
         }
 
