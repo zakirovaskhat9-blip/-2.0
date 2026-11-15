@@ -69,7 +69,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             Log.W("запуск: " + ex);
-            StatusText.Text = "Ошибка: " + ex.Message + "  (лог: " + Dirs.LogFile + ")";
+            StatusText.Text = "Ошибка: " + ex.GetBaseException().Message + "  (лог: " + Dirs.LogFile + ")";
         }
         finally { PlayBtn.IsEnabled = true; }
     }
