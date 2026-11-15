@@ -59,7 +59,7 @@ public sealed class MirrorHandler : DelegatingHandler
             }
             catch (Exception e) when (!ct.IsCancellationRequested)
             {
-                Log.W($"{u.Host} не ответил: {e.Message}");
+                Log.W($"{u.Host} не ответил: {e.GetType().Name}: {e.Message} | внутри: {e.GetBaseException().Message}");
             }
         }
         return await base.SendAsync(req, ct).ConfigureAwait(false);

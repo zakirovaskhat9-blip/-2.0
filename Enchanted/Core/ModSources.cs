@@ -250,7 +250,7 @@ public sealed class ModManager
                     if (file != null) { await Install(slug, file, src.Label); break; }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                catch (Exception e) { Log.W($"{src.Label} {slug}: {e.Message}"); file = null; }
+                catch (Exception e) { Log.W($"{src.Label} {slug}: {e.GetBaseException().Message}"); file = null; }
             }
             if (file != null)
             {
