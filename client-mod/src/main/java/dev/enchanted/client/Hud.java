@@ -20,6 +20,12 @@ public final class Hud {
 		}
 	}
 
+	/** Цель последнего удара, пока она жива и не истёк срок. */
+	static LivingEntity recent() {
+		LivingEntity t = target;
+		return t != null && System.currentTimeMillis() <= until && t.isAlive() && !t.isRemoved() ? t : null;
+	}
+
 	public static void render(GuiGraphics g, DeltaTracker dt) {
 		Minecraft mc = Minecraft.getInstance();
 		if (!Cfg.TARGET_ESP.enabled || mc.player == null || mc.level == null || mc.options.hideGui) return;
@@ -109,10 +115,11 @@ public final class Hud {
 		}
 		if (Cfg.ESP_HP.v) {
 			float hp = Math.max(0f, Math.min(1f, t.getHealth() / Math.max(1f, t.getMaxHealth())));
-			int bx = ix0 - 5, h = iy1 - iy0, fill = (int) (h * hp);
-			g.fill(bx - 1, iy0 - 1, bx + 2, iy1 + 1, 0xAA000000);
+			int hw = (int) Cfg.ESP_HPW.v;
+			int bx = ix0 - 4 - hw, h = iy1 - iy0, fill = (int) (h * hp);
+			g.fill(bx - 1, iy0 - 1, bx + hw + 1, iy1 + 1, 0xAA000000);
 			int hc = Cfg.hsv(hp * 0.33f, 0.85f, 1f) | 0xFF000000;
-			g.fill(bx, iy1 - fill, bx + 1, iy1, hc);
+			g.fill(bx, iy1 - fill, bx + hw, iy1, hc);
 		}
 		if (Cfg.ESP_NAME.v) {
 			String n = t.getName().getString();

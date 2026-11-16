@@ -12,7 +12,7 @@ import net.minecraft.network.chat.Component;
 /** Меню: боковая панель, карточки модулей с переключателями и шестерёнкой настроек. */
 public class EnchantedScreen extends Screen {
 	private static final int W = 540, H = 330, SIDE = 116;
-	private static final String[] TABS = {"Visuals", "Render", "Тема"};
+	private static final String[] TABS = {"Visuals", "HUD", "Render", "Тема"};
 	private static final int WHITE = 0xFFFFFFFF, GRAY = 0xFF9A9A9A, OFF = 0xFF3A3A3A;
 
 	private static int tab = 0;
@@ -112,7 +112,7 @@ public class EnchantedScreen extends Screen {
 		String title = open != null ? open.name : TABS[tab];
 		text(g, title, cx, cy, WHITE);
 
-		if (tab == 2) {
+		if (tab == 3) {
 			renderThemes(g, mx, my, cx, cy + 24, cw, ac);
 		} else if (open != null) {
 			renderSettings(g, mx, my, cx, cy, cw, ac);
@@ -122,7 +122,7 @@ public class EnchantedScreen extends Screen {
 	}
 
 	private void renderCards(GuiGraphics g, int mx, int my, int cx, int y0, int cw, int ac) {
-		String cat = tab == 0 ? Cfg.VIS : Cfg.REN;
+		String cat = tab == 0 ? Cfg.VIS : tab == 1 ? Cfg.HUD : Cfg.REN;
 		int cols = cw >= 360 ? 3 : 2, gap = 8, cardW = (cw - (cols - 1) * gap) / cols, cardH = 60;
 		int i = 0;
 		for (Cfg.Module m : Cfg.ALL) {
@@ -159,7 +159,8 @@ public class EnchantedScreen extends Screen {
 		int y = cy + 28;
 		int ctrlX = cx + (int) (cw * 0.42), ctrlW = cw - (int) (cw * 0.42) - 4;
 		for (Cfg.Setting s : m.settings) {
-			rr(g, cx, y - 4, cw, 26, 5, 0xFF141414);
+			int hgt = s instanceof Cfg.Color ? 82 : 26;
+			rr(g, cx, y - 4, cw, hgt, 5, 0xFF141414);
 			text(g, trim(s.name, ctrlX - cx - 12), cx + 8, y + 5, WHITE);
 			if (s instanceof Cfg.Bool b) {
 				toggle(g, ctrlX + ctrlW - 26, y + 3, b.v, ac);
@@ -179,26 +180,18 @@ public class EnchantedScreen extends Screen {
 					dragTo(mx);
 				}));
 			} else if (s instanceof Cfg.Color c) {
-				int n = Cfg.CRGB.length, sz = 12, step = Math.min(15, ctrlW / n);
-				for (int k = 0; k < n; k++) {
-					int sx = ctrlX + k * step;
-					if (k == Cfg.RAINBOW) {
-						for (int q = 0; q < 4; q++) {
-							g.fill(sx + q * 3, y + 3, sx + q * 3 + 3, y + 3 + sz, 0xFF000000 | Cfg.hsv(q / 4f, 0.7f, 1f));
-						}
-					} else {
-						g.fill(sx, y + 3, sx + sz, y + 3 + sz, 0xFF000000 | Cfg.CRGB[k]);
-					}
-					if (c.idx == k) {
-						g.fill(sx - 1, y + 2, sx + sz + 1, y + 3, WHITE);
-						g.fill(sx - 1, y + 3 + sz, sx + sz + 1, y + 4 + sz, WHITE);
-						g.fill(sx - 1, y + 2, sx, y + 4 + sz, WHITE);
-						g.fill(sx + sz, y + 2, sx + sz + 1, y + 4 + sz, WHITE);
-					}
-					final int kk = k;
-					hits.add(new Hit(sx, y + 2, step, sz + 2, () -> { c.idx = kk; Cfg.changed(m); }));
+				g.fill(ctrlX, y + 2, ctrlX + 22, y + 16, 0xFF000000 | c.rgb());
+				text(g, "Радуга", ctrlX + 30, y + 5, GRAY);
+				toggle(g, ctrlX + ctrlW - 26, y + 3, c.idx == Cfg.RAINBOW, ac);
+				hits.add(new Hit(ctrlX + 26, y - 4, ctrlW - 26, 26, () -> { c.idx = c.idx == Cfg.RAINBOW ? 0 : Cfg.RAINBOW; Cfg.changed(m); }));
+				Cfg.Slider[] rgb = {c.sr, c.sg, c.sb};
+				String[] ln = {"R", "G", "B"};
+				int[] lc = {0xFFFF6A6A, 0xFF6AFF8A, 0xFF6A9AFF};
+				for (int q = 0; q < 3; q++) {
+					int sy = y + 24 + q * 18;
+					text(g, ln[q], cx + 10, sy + 5, lc[q]);
+					slider(g, rgb[q], cx + 26, sy, cw - 26 - 50, ac, mx, () -> c.idx = 0);
 				}
-				text(g, Cfg.CNAMES[c.idx], cx + 8, y + 15 - 1, GRAY);
 			} else if (s instanceof Cfg.Choice ch) {
 				int bw = 150, bx2 = ctrlX + ctrlW - bw;
 				rr(g, bx2, y + 1, bw, 16, 5, 0xFF262626);
@@ -209,8 +202,23 @@ public class EnchantedScreen extends Screen {
 				hits.add(new Hit(bx2, y + 1, bw / 2, 16, () -> { ch.idx = Math.floorMod(ch.idx - 1, ch.opts.length); Cfg.changed(m); }));
 				hits.add(new Hit(bx2 + bw / 2, y + 1, bw / 2, 16, () -> { ch.idx = Math.floorMod(ch.idx + 1, ch.opts.length); Cfg.changed(m); }));
 			}
-			y += 30;
+			y += hgt + 4;
 		}
+	}
+
+	private void slider(GuiGraphics g, Cfg.Slider sl, int tx, int y, int tw, int ac, int mx, Runnable pre) {
+		rr(g, tx, y + 7, tw, 4, 2, OFF);
+		float f = (float) ((sl.v - sl.min) / (sl.max - sl.min));
+		rr(g, tx, y + 7, Math.max(4, (int) (tw * f)), 4, 2, ac);
+		rr(g, tx + (int) ((tw - 6) * f), y + 4, 6, 10, 3, WHITE);
+		text(g, Math.round(sl.v) + sl.unit, tx + tw + 8, y + 5, GRAY);
+		hits.add(new Hit(tx - 3, y - 2, tw + 6, 22, () -> {
+			pre.run();
+			dragging = sl;
+			dragX = tx;
+			dragW = tw;
+			dragTo(mx);
+		}));
 	}
 
 	private void renderThemes(GuiGraphics g, int mx, int my, int cx, int y0, int cw, int ac) {

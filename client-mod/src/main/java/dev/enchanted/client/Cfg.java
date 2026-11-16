@@ -52,14 +52,43 @@ public final class Cfg {
 		void set(double d) { v = Math.max(min, Math.min(max, Math.round(d / step) * step)); }
 	}
 
+	/** Цвет: ползунки R/G/B или радуга. В файл пишется одним числом (-1 = радуга). */
 	public static final class Color extends Setting {
-		public int idx;
-		Color(String id, String name, int def) { super(id, name); idx = def; }
-		double get() { return idx; }
-		void set(double d) { idx = Math.floorMod((int) d, CRGB.length); }
+		public int idx; // RAINBOW или 0 (свой цвет)
+		final Slider sr = new Slider("r", "R", 0, 255, 1, 255, "");
+		final Slider sg = new Slider("g", "G", 0, 255, 1, 255, "");
+		final Slider sb = new Slider("b", "B", 0, 255, 1, 255, "");
+
+		Color(String id, String name, int def) {
+			super(id, name);
+			fromIdx(def);
+		}
+
+		private void fromIdx(int d) {
+			if (d == RAINBOW) { idx = RAINBOW; return; }
+			idx = 0;
+			setCustom(CRGB[Math.floorMod(d, CRGB.length - 1)]);
+		}
+
+		private void setCustom(int c) {
+			sr.v = (c >> 16) & 255;
+			sg.v = (c >> 8) & 255;
+			sb.v = c & 255;
+		}
+
+		private int custom() { return ((int) sr.v << 16) | ((int) sg.v << 8) | (int) sb.v; }
+
+		double get() { return idx == RAINBOW ? -1 : 0x1000000 + custom(); }
+
+		void set(double d) {
+			if (d < 0) idx = RAINBOW;
+			else if (d >= 0x1000000) { idx = 0; setCustom((int) d - 0x1000000); }
+			else fromIdx((int) d); // старый формат (номер цвета из палитры)
+		}
+
 		/** RGB (без альфы); радуга считается по времени. */
 		public int rgb() {
-			if (idx != RAINBOW) return CRGB[idx];
+			if (idx != RAINBOW) return custom();
 			return hsv((System.currentTimeMillis() % 4000L) / 4000f, 0.65f, 1f);
 		}
 	}
@@ -84,18 +113,19 @@ public final class Cfg {
 		Module apply(Runnable r) { this.apply = r; return this; }
 	}
 
-	static final String VIS = "Visuals", REN = "Render";
+	static final String VIS = "Visuals", HUD = "HUD", REN = "Render";
 
 	// ---- Target ESP ----
 	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 1, "Рамка", "Углы", "Заливка", "Скобки", "Ромб", "Кольцо", "Орбита", "Стрелка", "Перекрестие");
 	public static final Color ESP_COLOR = new Color("color", "Цвет", RAINBOW);
 	public static final Bool ESP_HP = new Bool("hp", "Полоска здоровья", true);
+	public static final Slider ESP_HPW = new Slider("hpw", "Толщина здоровья", 1, 8, 1, 2, " px");
 	public static final Bool ESP_NAME = new Bool("name", "Ник цели", true);
 	public static final Slider ESP_TIME = new Slider("time", "Держать после удара", 1, 10, 1, 4, " с");
 	public static final Bool ESP_ANIM = new Bool("anim", "Анимация (пульс)", true);
 	public static final Bool ESP_AIM = new Bool("aim", "Также при наведении", false);
 	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Метка на цели боя", VIS, true,
-			ESP_STYLE, ESP_COLOR, ESP_ANIM, ESP_HP, ESP_NAME, ESP_TIME, ESP_AIM);
+			ESP_STYLE, ESP_COLOR, ESP_ANIM, ESP_HP, ESP_HPW, ESP_NAME, ESP_TIME, ESP_AIM);
 
 	// ---- Hit Color ----
 	public static final Color HIT_COLOR = new Color("color", "Цвет удара", 1);
@@ -108,9 +138,32 @@ public final class Cfg {
 	public static final Color SKY_COLOR = new Color("sky", "Цвет неба", 8);
 	public static final Bool SKY_FOG = new Bool("fog", "Туман в цвет неба", true);
 	public static final Color SKY_CLOUD = new Color("cloud", "Цвет облаков", 9);
-	public static final Bool SKY_STARS = new Bool("stars", "Звёзды всегда", true);
+	public static final Bool SKY_STARS = new Bool("stars_on", "Звёзды (3D)", false);
 	public static final Module SKY = new Module("sky", "Custom Sky", "Готовые и свои небеса, анимация", VIS, false,
 			SKY_PRESET, SKY_COLOR, SKY_FOG, SKY_CLOUD, SKY_STARS);
+
+	// ---- HUD-модули ----
+	public static final Color OV_COLOR = new Color("color", "Цвет HUD", RAINBOW);
+	public static final Bool WM_FPS = new Bool("fps", "FPS в плашке", true);
+	public static final Bool WM_TIME = new Bool("time", "Время в плашке", true);
+	public static final Module WM = new Module("watermark", "Watermark", "Плашка с FPS и временем", HUD, true, OV_COLOR, WM_FPS, WM_TIME);
+	public static final Bool I_FPS = new Bool("fps", "FPS", true);
+	public static final Bool I_XYZ = new Bool("xyz", "Координаты", true);
+	public static final Bool I_SPEED = new Bool("speed", "Скорость", true);
+	public static final Bool I_DIR = new Bool("dir", "Курс", true);
+	public static final Module INFO = new Module("info", "Info HUD", "Координаты, скорость, курс", HUD, false, I_FPS, I_XYZ, I_SPEED, I_DIR);
+	public static final Bool K_CPS = new Bool("cps", "Показывать CPS", true);
+	public static final Module KEYS = new Module("keys", "Keystrokes", "WASD, пробел, мышь и CPS", HUD, false, K_CPS);
+	public static final Module ARRAY = new Module("arraylist", "ArrayList", "Список включённых модулей", HUD, false);
+
+	public static final Module THUD = new Module("targethud", "Target HUD", "Карточка цели: ник и здоровье", HUD, false);
+	public static final Module ARMOR = new Module("armorhud", "Armor HUD", "Броня и её прочность", HUD, false);
+	public static final Module EFFECTS = new Module("effects", "Effects", "Активные эффекты и время", HUD, false);
+	public static final Color HM_COLOR = new Color("color", "Цвет метки", 0);
+	public static final Slider HM_SIZE = new Slider("size", "Размер", 3, 12, 1, 6, " px");
+	public static final Module HITMARK = new Module("hitmarker", "Hit Marker", "Метка у прицела при попадании", HUD, false, HM_COLOR, HM_SIZE);
+	public static final Slider Z_FOV = new Slider("fov", "Приближение (FOV)", 30, 90, 1, 30, "");
+	public static final Module ZOOM = new Module("zoom", "Zoom", "Зажми C - приблизить", VIS, false, Z_FOV);
 
 	// ---- обычные настройки ----
 	public static final Slider FOV_V = new Slider("fov", "FOV", 30, 110, 1, 90, "");
@@ -137,7 +190,7 @@ public final class Cfg {
 		opts().enableVsync().set(Cfg.VSYNC.enabled);
 	});
 
-	static final List<Module> ALL = List.of(TARGET_ESP, HIT, SKY, FOV, BRIGHT, BOB, RD, FPS, VSYNC);
+	static final List<Module> ALL = List.of(TARGET_ESP, HIT, SKY, WM, INFO, KEYS, ARRAY, THUD, ARMOR, EFFECTS, HITMARK, ZOOM, FOV, BRIGHT, BOB, RD, FPS, VSYNC);
 
 	static Options opts() { return Minecraft.getInstance().options; }
 

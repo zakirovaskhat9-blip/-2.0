@@ -27,8 +27,10 @@ public abstract class ProbeMixin {
 			res = paint(orig, d != null ? d.fog() : Cfg.SKY_COLOR.rgb());
 		} else if (attr == EnvironmentAttributes.CLOUD_COLOR) {
 			res = paint(orig, d != null ? d.cloud() : Cfg.SKY_CLOUD.rgb());
-		} else if (attr == EnvironmentAttributes.STAR_BRIGHTNESS && (d != null || Cfg.SKY_STARS.v)) {
-			res = Float.valueOf(d == null || d.stars ? 1.0f : 0.0f);
+		} else if (attr == EnvironmentAttributes.STAR_BRIGHTNESS) {
+			// плоское небо: объёмные звёзды выключены, поэтому они не дрожат при движении
+			if (d != null) res = Float.valueOf(Cfg.SKY_STARS.v && d.stars ? 1.0f : 0.0f);
+			else if (Cfg.SKY_STARS.v) res = Float.valueOf(1.0f);
 		}
 		if (res != null) cir.setReturnValue((V) res);
 	}
