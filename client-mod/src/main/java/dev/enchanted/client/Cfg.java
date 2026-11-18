@@ -138,36 +138,19 @@ public final class Cfg {
 
 	static final String VIS = "Visuals", HUD = "HUD";
 
-	// ---- 1. Target ESP ----
-	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 0, "Маркер", "Углы", "Кольцо", "Свечение", "Рамка");
-	public static final Bool ESP_THEME = new Bool("theme", "Цвет темы (градиент)", true);
-	public static final Color ESP_COLOR = new Color("color", "Свой цвет", 1);
-	public static final Bool ESP_ANIM = new Bool("anim", "Анимация (вращение, пульс)", true);
-	public static final Bool ESP_HP = new Bool("hp", "Полоска здоровья", true);
-	public static final Bool ESP_NAME = new Bool("name", "Ник цели", true);
-	public static final Bool ESP_DIST = new Bool("dist", "Дистанция", true);
-	public static final Slider ESP_TIME = new Slider("time", "Держать после удара", 1, 10, 1, 4, " с");
-	public static final Bool ESP_AIM = new Bool("aim", "Также при наведении", true);
-	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Красивая метка на цели боя", VIS, true,
-			ESP_STYLE, ESP_THEME, ESP_COLOR, ESP_ANIM, ESP_HP, ESP_NAME, ESP_DIST, ESP_TIME, ESP_AIM);
+	// ---- 1. Target ESP (только вращающийся ромб как в Nursultan, без настроек) ----
+	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Ромб на цели боя (как в Nursultan)", VIS, true);
 
-	// ---- 2. Custom Sky ----
-	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 1, SkyLib.names());
-	public static final Color SKY_COLOR = new Color("sky", "Цвет неба (свои цвета)", 8);
-	public static final Bool SKY_FOG = new Bool("fog", "Горизонт в цвет неба", true);
-	public static final Bool SKY_STARS = new Bool("stars_on", "Звёзды", false);
-	public static final Module SKY = new Module("sky", "Custom Sky", "Своё небо: без солнца, луны и облаков", VIS, false,
-			SKY_PRESET, SKY_COLOR, SKY_FOG, SKY_STARS);
+	// ---- 2. Custom Sky (только выбор неба) ----
+	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
+	public static final Module SKY = new Module("sky", "Custom Sky", "Своё небо: без солнца, луны и облаков", VIS, false, SKY_PRESET);
 
-	// ---- 3. FPS ----
-	public static final Bool FPS_GRAPH = new Bool("graph", "График FPS", true);
-	public static final Bool FPS_MS = new Bool("ms", "Время кадра (мс)", false);
-	public static final Module FPS = new Module("fps", "FPS", "Счётчик кадров в секунду", HUD, true, FPS_GRAPH, FPS_MS);
+	// ---- 3. FPS (просто счётчик) ----
+	public static final Module FPS = new Module("fps", "FPS", "Счётчик кадров в секунду", HUD, true);
 
-	// ---- 4. HP цели под прицелом ----
-	public static final Bool AH_NAME = new Bool("name", "Показывать ник", true);
-	public static final Bool AH_NUM = new Bool("num", "Здоровье числом", true);
-	public static final Module AIMHP = new Module("aimhp", "Enemy HP", "Здоровье противника под прицелом", HUD, true, AH_NAME, AH_NUM);
+	// ---- 4. HP противника под прицелом ----
+	public static final Choice AH_STYLE = new Choice("style", "Вид", 0, "Панель", "Цифры под прицелом");
+	public static final Module AIMHP = new Module("aimhp", "Enemy HP", "Здоровье противника под прицелом", HUD, true, AH_STYLE);
 
 	// ---- 5. Armor Status ----
 	public static final Bool AR_DUR = new Bool("dur", "Прочность в процентах", true);

@@ -21,16 +21,15 @@ public abstract class ProbeMixin {
 		Object orig = cir.getReturnValue();
 		Object res = null;
 		SkyLib.Def d = SkyLib.current(Cfg.SKY_PRESET.idx);
+		if (d == null) return;
 		if (attr == EnvironmentAttributes.SKY_COLOR) {
-			res = paint(orig, d != null ? d.sky() : Cfg.SKY_COLOR.rgb());
-		} else if (attr == EnvironmentAttributes.FOG_COLOR && (d != null || Cfg.SKY_FOG.v)) {
-			res = paint(orig, d != null ? d.fog() : Cfg.SKY_COLOR.rgb());
+			res = paint(orig, d.sky());
+		} else if (attr == EnvironmentAttributes.FOG_COLOR) {
+			res = paint(orig, d.fog());
 		} else if (attr == EnvironmentAttributes.CLOUD_COLOR) {
 			res = Integer.valueOf(0); // полностью прозрачные облака = облаков нет
 		} else if (attr == EnvironmentAttributes.STAR_BRIGHTNESS) {
-			// плоское небо: объёмные звёзды выключены, поэтому они не дрожат при движении
-			if (d != null) res = Float.valueOf(Cfg.SKY_STARS.v && d.stars ? 1.0f : 0.0f);
-			else if (Cfg.SKY_STARS.v) res = Float.valueOf(1.0f);
+			res = Float.valueOf(d.stars ? 1.0f : 0.0f);
 		}
 		if (res != null) cir.setReturnValue((V) res);
 	}

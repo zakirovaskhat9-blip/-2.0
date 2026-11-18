@@ -13,31 +13,19 @@ public final class Overlay {
 	private static final int GRAY = 0xFF9A9A9A, WHITE = 0xFFFFFFFF;
 
 	private static int fps, frames;
-	private static long fpsT = System.currentTimeMillis(), lastFrame = System.nanoTime();
-	private static final int[] HIST = new int[48];
-	private static int histPos;
-	private static long histT;
-	private static float frameMs;
+	private static long fpsT = System.currentTimeMillis();
 
 	public static void render(GuiGraphics g, DeltaTracker dt) {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null || mc.level == null || mc.options.hideGui) return;
 		Gfx.alphaMul = 1f;
 
-		long nano = System.nanoTime();
-		frameMs = frameMs * 0.9f + ((nano - lastFrame) / 1e6f) * 0.1f;
-		lastFrame = nano;
 		frames++;
 		long now = System.currentTimeMillis();
 		if (now - fpsT >= 500) {
 			fps = (int) Math.round(frames * 1000.0 / (now - fpsT));
 			frames = 0;
 			fpsT = now;
-		}
-		if (now - histT >= 250) {
-			histT = now;
-			HIST[histPos] = fps;
-			histPos = (histPos + 1) % HIST.length;
 		}
 
 		int sw = mc.getWindow().getGuiScaledWidth(), sh = mc.getWindow().getGuiScaledHeight();
@@ -55,26 +43,12 @@ public final class Overlay {
 
 	private static void fpsCounter(GuiGraphics g, Minecraft mc) {
 		Font f = mc.font;
-		String num = String.valueOf(fps), ms = Cfg.FPS_MS.v ? String.format("  %.1f мс", frameMs) : "";
-		int x = 6, y = 6, tw = f.width("FPS ") + f.width(num) + f.width(ms), w = tw + 20;
-		boolean graph = Cfg.FPS_GRAPH.v;
-		int h = graph ? 34 : 19;
+		String num = String.valueOf(fps);
+		int x = 6, y = 6, w = f.width("FPS ") + f.width(num) + 20, h = 19;
 		Gfx.panel(g, x, y, w, h);
 		Gfx.vgrad(g, x + 4, y + 4, 2, 11, Gfx.hud(0f), Gfx.hud(0.6f));
 		Gfx.gstr(g, f, "FPS", x + 11, y + 6, Gfx.hud(0f), Gfx.hud(0.5f), (System.currentTimeMillis() % 2500L) / 2500f);
 		Gfx.str(g, f, num, x + 11 + f.width("FPS "), y + 6, fpsColor(fps));
-		if (!ms.isEmpty()) Gfx.str(g, f, ms, x + 11 + f.width("FPS " + num), y + 6, GRAY);
-		if (graph) { // график последних ~12 секунд
-			int gx = x + 6, gy = y + 18, gw = w - 12, gh = 12, n = HIST.length;
-			int max = 60;
-			for (int v : HIST) max = Math.max(max, v);
-			for (int i = 0; i < n; i++) {
-				int v = HIST[(histPos + i) % n];
-				int bh = Math.max(1, v * gh / max);
-				int bx = gx + i * gw / n, bw = Math.max(1, gw / n - 1);
-				Gfx.rect(g, bx, gy + gh - bh, bx + bw, gy + gh, Gfx.a(fpsColor(v), 0.85f));
-			}
-		}
 	}
 
 	// ---------------- 4. HP противника под прицелом ----------------
@@ -101,8 +75,19 @@ public final class Overlay {
 		float shown = hpA.to(frac, 14f);
 		float trail = trA.to(frac, frac < trA.v ? 2.5f : 20f);
 
-		String name = Cfg.AH_NAME.v ? t.getName().getString() : "";
-		String num = Cfg.AH_NUM.v ? String.format("%.1f / %.0f", hp, max) : "";
+		if (Cfg.AH_STYLE.idx == 1) { // крупные цифры под прицелом: зелёный -> красный, ноль красный
+			int val = Math.max(0, (int) Math.ceil(hp));
+			String n = String.valueOf(val);
+			int col = 0xFF000000 | Cfg.hsv(frac * 0.33f, 0.85f, 1f);
+			float sc = 1.7f;
+			Gfx.alphaMul = a;
+			Gfx.strS(g, f, n, sw / 2f - f.width(n) * sc / 2f + 1f, sh / 2f + 11f, 0xFF000000, sc); // тёмная подложка
+			Gfx.strS(g, f, n, sw / 2f - f.width(n) * sc / 2f, sh / 2f + 10f, col, sc);
+			Gfx.alphaMul = 1f;
+			return;
+		}
+		String name = t.getName().getString();
+		String num = String.format("%.1f / %.0f", hp, max);
 		int w = Math.max(96, Math.max(f.width(name), f.width(num)) + 22);
 		int h = 12 + (name.isEmpty() ? 0 : 11) + (num.isEmpty() ? 0 : 11);
 		int x = sw / 2 - w / 2, y = sh / 2 + 16 + Math.round((1f - a) * 6f);
