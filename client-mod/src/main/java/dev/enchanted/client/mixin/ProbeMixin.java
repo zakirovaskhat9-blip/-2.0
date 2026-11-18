@@ -26,7 +26,7 @@ public abstract class ProbeMixin {
 		} else if (attr == EnvironmentAttributes.FOG_COLOR && (d != null || Cfg.SKY_FOG.v)) {
 			res = paint(orig, d != null ? d.fog() : Cfg.SKY_COLOR.rgb());
 		} else if (attr == EnvironmentAttributes.CLOUD_COLOR) {
-			res = paint(orig, d != null ? d.cloud() : Cfg.SKY_CLOUD.rgb());
+			res = Integer.valueOf(0); // полностью прозрачные облака = облаков нет
 		} else if (attr == EnvironmentAttributes.STAR_BRIGHTNESS) {
 			// плоское небо: объёмные звёзды выключены, поэтому они не дрожат при движении
 			if (d != null) res = Float.valueOf(Cfg.SKY_STARS.v && d.stars ? 1.0f : 0.0f);

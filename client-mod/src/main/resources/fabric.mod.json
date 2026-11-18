@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "enchanted_client",
-	"version": "2.0.0",
+	"version": "2.1.0",
 	"name": "Enchanted Client",
 	"description": "Встроенное меню Enchanted (правый Shift): Target ESP, Hit Color, Custom Sky, настройки графики.",
 	"authors": ["Enchanted"],

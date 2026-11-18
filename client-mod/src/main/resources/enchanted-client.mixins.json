@@ -3,7 +3,7 @@
 	"minVersion": "0.8",
 	"package": "dev.enchanted.client.mixin",
 	"compatibilityLevel": "JAVA_21",
-	"client": ["OverlayTextureMixin", "ProbeMixin"],
+	"client": ["ProbeMixin", "SkyBodiesMixin"],
 	"injectors": {
 		"defaultRequire": 0
 	}

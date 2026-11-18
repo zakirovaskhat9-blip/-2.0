@@ -5,6 +5,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.lwjgl.glfw.GLFW;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -12,14 +14,23 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 
-/** Настройки клиента: модули, их параметры, сохранение в config/enchanted-client.json. */
+/** Настройки клиента: модули, их параметры, клавиши, позиции HUD, сохранение в config/enchanted-client.json. */
 public final class Cfg {
 	static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("enchanted-client.json");
 
-	// ---- темы интерфейса ----
-	static final String[] THEMES = {"Белый", "Океан", "Аметист", "Рубин", "Янтарь"};
-	static final int[] ACCENT = {0xFFF2F2F2, 0xFF4DA3FF, 0xFFA77BFF, 0xFFFF5A6A, 0xFFFFB040};
+	// ---- темы интерфейса: основной цвет + второй цвет для градиентов ----
+	static final String[] THEMES = {"Белый", "Океан", "Аметист", "Рубин", "Янтарь", "Неон", "Закат", "Мята"};
+	static final int[] ACCENT = {0xFFF2F2F2, 0xFF4DA3FF, 0xFFA77BFF, 0xFFFF5A6A, 0xFFFFB040, 0xFFFF4DDB, 0xFFFF7A59, 0xFF4DFFC3};
+	static final int[] ACCENT2 = {0xFF9DB4FF, 0xFF4DFFE0, 0xFF6BA8FF, 0xFFFFA05A, 0xFFFF5A8A, 0xFF4DE1FF, 0xFFB06BFF, 0xFF4DA3FF};
 	static int theme = 0;
+
+	public static int accent() {
+		return ACCENT[Math.floorMod(theme, ACCENT.length)];
+	}
+
+	public static int accent2() {
+		return ACCENT2[Math.floorMod(theme, ACCENT2.length)];
+	}
 
 	// ---- палитра цветов для настроек ----
 	static final String[] CNAMES = {"Белый", "Красный", "Оранжевый", "Жёлтый", "Зелёный", "Голубой", "Синий", "Тёмно-синий", "Фиолетовый", "Розовый", "Радуга"};
@@ -29,14 +40,17 @@ public final class Cfg {
 	// ---- типы настроек ----
 	public abstract static class Setting {
 		final String id, name;
+		double d0; // значение по умолчанию (для кнопки «Сброс»)
+
 		Setting(String id, String name) { this.id = id; this.name = name; }
 		abstract double get();
 		abstract void set(double v);
+		void reset() { set(d0); }
 	}
 
 	public static final class Bool extends Setting {
 		public boolean v;
-		Bool(String id, String name, boolean def) { super(id, name); v = def; }
+		Bool(String id, String name, boolean def) { super(id, name); v = def; d0 = get(); }
 		double get() { return v ? 1 : 0; }
 		void set(double d) { v = d >= 0.5; }
 	}
@@ -46,7 +60,7 @@ public final class Cfg {
 		final String unit;
 		public double v;
 		Slider(String id, String name, double min, double max, double step, double def, String unit) {
-			super(id, name); this.min = min; this.max = max; this.step = step; this.v = def; this.unit = unit;
+			super(id, name); this.min = min; this.max = max; this.step = step; this.v = def; this.unit = unit; d0 = get();
 		}
 		double get() { return v; }
 		void set(double d) { v = Math.max(min, Math.min(max, Math.round(d / step) * step)); }
@@ -62,6 +76,7 @@ public final class Cfg {
 		Color(String id, String name, int def) {
 			super(id, name);
 			fromIdx(def);
+			d0 = get();
 		}
 
 		private void fromIdx(int d) {
@@ -74,6 +89,12 @@ public final class Cfg {
 			sr.v = (c >> 16) & 255;
 			sg.v = (c >> 8) & 255;
 			sb.v = c & 255;
+		}
+
+		/** Выбрать готовый цвет из палитры (выключает радугу). */
+		void pick(int rgb) {
+			idx = 0;
+			setCustom(rgb);
 		}
 
 		private int custom() { return ((int) sr.v << 16) | ((int) sg.v << 8) | (int) sb.v; }
@@ -96,7 +117,7 @@ public final class Cfg {
 	public static final class Choice extends Setting {
 		String[] opts;
 		public int idx;
-		Choice(String id, String name, int def, String... opts) { super(id, name); this.opts = opts; this.idx = def; }
+		Choice(String id, String name, int def, String... opts) { super(id, name); this.opts = opts; this.idx = def; d0 = get(); }
 		double get() { return idx; }
 		void set(double d) { idx = Math.floorMod((int) d, opts.length); }
 	}
@@ -105,6 +126,8 @@ public final class Cfg {
 		final String id, name, desc, cat;
 		final List<Setting> settings = new ArrayList<>();
 		public boolean enabled;
+		public int key;       // клавиша-переключатель (GLFW), 0 - не назначена
+		boolean keyDown;
 		Runnable apply = () -> { };
 		Module(String id, String name, String desc, String cat, boolean def, Setting... s) {
 			this.id = id; this.name = name; this.desc = desc; this.cat = cat; this.enabled = def;
@@ -113,84 +136,52 @@ public final class Cfg {
 		Module apply(Runnable r) { this.apply = r; return this; }
 	}
 
-	static final String VIS = "Visuals", HUD = "HUD", REN = "Render";
+	static final String VIS = "Visuals", HUD = "HUD";
 
-	// ---- Target ESP ----
-	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 1, "Рамка", "Углы", "Заливка", "Скобки", "Ромб", "Кольцо", "Орбита", "Стрелка", "Перекрестие");
-	public static final Color ESP_COLOR = new Color("color", "Цвет", RAINBOW);
+	// ---- 1. Target ESP ----
+	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 0, "Маркер", "Углы", "Кольцо", "Свечение", "Рамка");
+	public static final Bool ESP_THEME = new Bool("theme", "Цвет темы (градиент)", true);
+	public static final Color ESP_COLOR = new Color("color", "Свой цвет", 1);
+	public static final Bool ESP_ANIM = new Bool("anim", "Анимация (вращение, пульс)", true);
 	public static final Bool ESP_HP = new Bool("hp", "Полоска здоровья", true);
-	public static final Slider ESP_HPW = new Slider("hpw", "Толщина здоровья", 1, 8, 1, 2, " px");
 	public static final Bool ESP_NAME = new Bool("name", "Ник цели", true);
+	public static final Bool ESP_DIST = new Bool("dist", "Дистанция", true);
 	public static final Slider ESP_TIME = new Slider("time", "Держать после удара", 1, 10, 1, 4, " с");
-	public static final Bool ESP_ANIM = new Bool("anim", "Анимация (пульс)", true);
-	public static final Bool ESP_AIM = new Bool("aim", "Также при наведении", false);
-	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Метка на цели боя", VIS, true,
-			ESP_STYLE, ESP_COLOR, ESP_ANIM, ESP_HP, ESP_HPW, ESP_NAME, ESP_TIME, ESP_AIM);
+	public static final Bool ESP_AIM = new Bool("aim", "Также при наведении", true);
+	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Красивая метка на цели боя", VIS, true,
+			ESP_STYLE, ESP_THEME, ESP_COLOR, ESP_ANIM, ESP_HP, ESP_NAME, ESP_DIST, ESP_TIME, ESP_AIM);
 
-	// ---- Hit Color ----
-	public static final Color HIT_COLOR = new Color("color", "Цвет удара", 1);
-	public static final Slider HIT_ALPHA = new Slider("alpha", "Насыщенность", 20, 100, 5, 70, "%");
-	public static final Module HIT = new Module("hitcolor", "Hit Color", "Цвет подсветки при ударе", VIS, true, HIT_COLOR, HIT_ALPHA)
-			.apply(() -> HitColor.refresh());
+	// ---- 2. Custom Sky ----
+	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 1, SkyLib.names());
+	public static final Color SKY_COLOR = new Color("sky", "Цвет неба (свои цвета)", 8);
+	public static final Bool SKY_FOG = new Bool("fog", "Горизонт в цвет неба", true);
+	public static final Bool SKY_STARS = new Bool("stars_on", "Звёзды", false);
+	public static final Module SKY = new Module("sky", "Custom Sky", "Своё небо: без солнца, луны и облаков", VIS, false,
+			SKY_PRESET, SKY_COLOR, SKY_FOG, SKY_STARS);
 
-	// ---- Custom Sky ----
-	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
-	public static final Color SKY_COLOR = new Color("sky", "Цвет неба", 8);
-	public static final Bool SKY_FOG = new Bool("fog", "Туман в цвет неба", true);
-	public static final Color SKY_CLOUD = new Color("cloud", "Цвет облаков", 9);
-	public static final Bool SKY_STARS = new Bool("stars_on", "Звёзды (3D)", false);
-	public static final Module SKY = new Module("sky", "Custom Sky", "Готовые и свои небеса, анимация", VIS, false,
-			SKY_PRESET, SKY_COLOR, SKY_FOG, SKY_CLOUD, SKY_STARS);
+	// ---- 3. FPS ----
+	public static final Bool FPS_GRAPH = new Bool("graph", "График FPS", true);
+	public static final Bool FPS_MS = new Bool("ms", "Время кадра (мс)", false);
+	public static final Module FPS = new Module("fps", "FPS", "Счётчик кадров в секунду", HUD, true, FPS_GRAPH, FPS_MS);
 
-	// ---- HUD-модули ----
-	public static final Color OV_COLOR = new Color("color", "Цвет HUD", RAINBOW);
-	public static final Bool WM_FPS = new Bool("fps", "FPS в плашке", true);
-	public static final Bool WM_TIME = new Bool("time", "Время в плашке", true);
-	public static final Module WM = new Module("watermark", "Watermark", "Плашка с FPS и временем", HUD, true, OV_COLOR, WM_FPS, WM_TIME);
-	public static final Bool I_FPS = new Bool("fps", "FPS", true);
-	public static final Bool I_XYZ = new Bool("xyz", "Координаты", true);
-	public static final Bool I_SPEED = new Bool("speed", "Скорость", true);
-	public static final Bool I_DIR = new Bool("dir", "Курс", true);
-	public static final Module INFO = new Module("info", "Info HUD", "Координаты, скорость, курс", HUD, false, I_FPS, I_XYZ, I_SPEED, I_DIR);
-	public static final Bool K_CPS = new Bool("cps", "Показывать CPS", true);
-	public static final Module KEYS = new Module("keys", "Keystrokes", "WASD, пробел, мышь и CPS", HUD, false, K_CPS);
-	public static final Module ARRAY = new Module("arraylist", "ArrayList", "Список включённых модулей", HUD, false);
+	// ---- 4. HP цели под прицелом ----
+	public static final Bool AH_NAME = new Bool("name", "Показывать ник", true);
+	public static final Bool AH_NUM = new Bool("num", "Здоровье числом", true);
+	public static final Module AIMHP = new Module("aimhp", "Enemy HP", "Здоровье противника под прицелом", HUD, true, AH_NAME, AH_NUM);
 
-	public static final Module THUD = new Module("targethud", "Target HUD", "Карточка цели: ник и здоровье", HUD, false);
-	public static final Module ARMOR = new Module("armorhud", "Armor HUD", "Броня и её прочность", HUD, false);
-	public static final Module EFFECTS = new Module("effects", "Effects", "Активные эффекты и время", HUD, false);
-	public static final Color HM_COLOR = new Color("color", "Цвет метки", 0);
-	public static final Slider HM_SIZE = new Slider("size", "Размер", 3, 12, 1, 6, " px");
-	public static final Module HITMARK = new Module("hitmarker", "Hit Marker", "Метка у прицела при попадании", HUD, false, HM_COLOR, HM_SIZE);
-	public static final Slider Z_FOV = new Slider("fov", "Приближение (FOV)", 30, 90, 1, 30, "");
-	public static final Module ZOOM = new Module("zoom", "Zoom", "Зажми C - приблизить", VIS, false, Z_FOV);
+	// ---- 5. Armor Status ----
+	public static final Bool AR_DUR = new Bool("dur", "Прочность в процентах", true);
+	public static final Bool AR_VERT = new Bool("vert", "Столбиком (иначе в ряд)", true);
+	public static final Module ARMOR = new Module("armor", "Armor Status", "Броня и её прочность", HUD, true, AR_DUR, AR_VERT);
 
-	// ---- обычные настройки ----
-	public static final Slider FOV_V = new Slider("fov", "FOV", 30, 110, 1, 90, "");
-	public static final Module FOV = new Module("fov", "FOV", "Угол обзора", VIS, false, FOV_V).apply(() -> {
-		if (Cfg.FOV.enabled) opts().fov().set((int) FOV_V.v);
-	});
-	public static final Slider BR_V = new Slider("level", "Яркость", 0, 100, 5, 100, "%");
-	public static final Module BRIGHT = new Module("bright", "Яркость", "Яркость мира", VIS, false, BR_V).apply(() -> {
-		if (Cfg.BRIGHT.enabled) opts().gamma().set(BR_V.v / 100.0);
-	});
-	public static final Module BOB = new Module("bob", "Покачивание", "Покачивание камеры при ходьбе", VIS, true).apply(() -> {
-		opts().bobView().set(Cfg.BOB.enabled);
-	});
+	// ---- оформление интерфейса (вкладка «Тема») ----
+	public static final Slider UI_OPACITY = new Slider("opacity", "Прозрачность плашек", 30, 100, 5, 72, "%");
+	public static final Slider UI_ROUND = new Slider("round", "Скругление", 0, 8, 1, 4, " px");
+	public static final Bool UI_GLOW = new Bool("glow", "Тени и свечение", true);
+	public static final Bool UI_PART = new Bool("particles", "Частицы в меню", true);
+	public static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART);
 
-	public static final Slider RD_V = new Slider("dist", "Блоков (чанков)", 2, 32, 1, 12, "");
-	public static final Module RD = new Module("rd", "Дальность", "Дальность прорисовки", REN, false, RD_V).apply(() -> {
-		if (Cfg.RD.enabled) opts().renderDistance().set((int) RD_V.v);
-	});
-	public static final Slider FPS_V = new Slider("fps", "Макс. FPS", 30, 260, 10, 260, "");
-	public static final Module FPS = new Module("fps", "Лимит FPS", "260 = без лимита", REN, false, FPS_V).apply(() -> {
-		if (Cfg.FPS.enabled) opts().framerateLimit().set((int) FPS_V.v);
-	});
-	public static final Module VSYNC = new Module("vsync", "VSync", "Вертикальная синхронизация", REN, false).apply(() -> {
-		opts().enableVsync().set(Cfg.VSYNC.enabled);
-	});
-
-	static final List<Module> ALL = List.of(TARGET_ESP, HIT, SKY, WM, INFO, KEYS, ARRAY, THUD, ARMOR, EFFECTS, HITMARK, ZOOM, FOV, BRIGHT, BOB, RD, FPS, VSYNC);
+	static final List<Module> ALL = List.of(TARGET_ESP, SKY, FPS, AIMHP, ARMOR);
 
 	static Options opts() { return Minecraft.getInstance().options; }
 
@@ -210,6 +201,41 @@ public final class Cfg {
 		return ((int) (r * 255) << 16) | ((int) (g * 255) << 8) | (int) (b * 255);
 	}
 
+	/** Название клавиши для интерфейса. */
+	static String keyName(int k) {
+		if (k <= 0) return "—";
+		String s = switch (k) {
+			case GLFW.GLFW_KEY_SPACE -> "Space";
+			case GLFW.GLFW_KEY_LEFT_SHIFT -> "LShift";
+			case GLFW.GLFW_KEY_RIGHT_SHIFT -> "RShift";
+			case GLFW.GLFW_KEY_LEFT_CONTROL -> "LCtrl";
+			case GLFW.GLFW_KEY_RIGHT_CONTROL -> "RCtrl";
+			case GLFW.GLFW_KEY_LEFT_ALT -> "LAlt";
+			case GLFW.GLFW_KEY_RIGHT_ALT -> "RAlt";
+			case GLFW.GLFW_KEY_TAB -> "Tab";
+			case GLFW.GLFW_KEY_ENTER -> "Enter";
+			case GLFW.GLFW_KEY_UP -> "Up";
+			case GLFW.GLFW_KEY_DOWN -> "Down";
+			case GLFW.GLFW_KEY_LEFT -> "Left";
+			case GLFW.GLFW_KEY_RIGHT -> "Right";
+			case GLFW.GLFW_KEY_INSERT -> "Insert";
+			case GLFW.GLFW_KEY_HOME -> "Home";
+			case GLFW.GLFW_KEY_END -> "End";
+			case GLFW.GLFW_KEY_PAGE_UP -> "PgUp";
+			case GLFW.GLFW_KEY_PAGE_DOWN -> "PgDn";
+			case GLFW.GLFW_KEY_CAPS_LOCK -> "Caps";
+			default -> null;
+		};
+		if (s != null) return s;
+		if (k >= GLFW.GLFW_KEY_F1 && k <= GLFW.GLFW_KEY_F12) return "F" + (k - GLFW.GLFW_KEY_F1 + 1);
+		String n = null;
+		try {
+			n = GLFW.glfwGetKeyName(k, 0);
+		} catch (Throwable ignored) {
+		}
+		return n != null ? n.toUpperCase() : "K" + k;
+	}
+
 	/** Применить изменение модуля: опции игры, цвет удара и сохранение. */
 	static void changed(Module m) {
 		try {
@@ -219,27 +245,10 @@ public final class Cfg {
 		save();
 	}
 
-	/** Подтянуть текущие значения из настроек игры (чтобы ползунки стартовали с реальных). */
-	static void syncFromOptions() {
-		try {
-			Options o = opts();
-			if (!FOV.enabled) FOV_V.set(o.fov().get());
-			if (!BRIGHT.enabled) BR_V.set(o.gamma().get() * 100.0);
-			if (!RD.enabled) RD_V.set(o.renderDistance().get());
-			if (!FPS.enabled) FPS_V.set(o.framerateLimit().get());
-			BOB.enabled = o.bobView().get();
-			VSYNC.enabled = o.enableVsync().get();
-		} catch (Throwable ignored) {
-		}
-	}
-
-	static void applyAll() {
-		for (Module m : ALL) {
-			try {
-				m.apply.run();
-			} catch (Throwable ignored) {
-			}
-		}
+	/** Переключить модуль (меню, клавиша); с клавиши - ещё и всплывашка. */
+	static void toggle(Module m) {
+		m.enabled = !m.enabled;
+		changed(m);
 	}
 
 	static void load() {
@@ -252,8 +261,15 @@ public final class Cfg {
 				if (!mods.has(m.id)) continue;
 				JsonObject mo = mods.getAsJsonObject(m.id);
 				if (mo.has("on")) m.enabled = mo.get("on").getAsBoolean();
+				if (mo.has("key")) m.key = mo.get("key").getAsInt();
 				for (Setting s : m.settings) {
 					if (mo.has(s.id)) s.set(mo.get(s.id).getAsDouble());
+				}
+			}
+			if (o.has("style")) {
+				JsonObject so = o.getAsJsonObject("style");
+				for (Setting s : STYLE.settings) {
+					if (so.has(s.id)) s.set(so.get(s.id).getAsDouble());
 				}
 			}
 		} catch (Exception ignored) {
@@ -268,10 +284,14 @@ public final class Cfg {
 			for (Module m : ALL) {
 				JsonObject mo = new JsonObject();
 				mo.addProperty("on", m.enabled);
+				mo.addProperty("key", m.key);
 				for (Setting s : m.settings) mo.addProperty(s.id, s.get());
 				mods.add(m.id, mo);
 			}
 			o.add("modules", mods);
+			JsonObject so = new JsonObject();
+			for (Setting s : STYLE.settings) so.addProperty(s.id, s.get());
+			o.add("style", so);
 			Files.writeString(FILE, o.toString());
 		} catch (Exception ignored) {
 		}
