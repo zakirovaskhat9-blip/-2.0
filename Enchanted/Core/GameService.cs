@@ -126,7 +126,13 @@ public sealed class GameService
 
         // моды
         InstallClientMod(mc);
-        if (mc == "1.21.11") Skies.Seed();
+        if (mc == "1.21.11")
+        {
+            Skies.Seed();
+            var nick = string.IsNullOrWhiteSpace(cfg.Nick) ? "Player" : cfg.Nick.Trim();
+            SkinStore.WriteModConfig(mc, cfg, nick);
+            _ = Task.Run(async () => { var err = await SkinStore.UploadAsync(cfg, nick); if (err != null) Log.W("скин при запуске: " + err); });
+        }
         var mods = new ModManager(Http, cfg);
         int missing = await mods.EnsureAsync(mc, status, row, ct);
 

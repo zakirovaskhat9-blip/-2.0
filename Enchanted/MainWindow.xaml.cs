@@ -21,6 +21,51 @@ public partial class MainWindow : Window
         (cfg.Version == "1.21.4" ? V2 : V1).IsChecked = true;
         (cfg.Mirrors ? S1 : S2).IsChecked = true;
         VerifyBox.IsChecked = cfg.VerifyFiles;
+        SlimBox.IsChecked = cfg.SkinSlim;
+        SkinServerBox.Text = cfg.SkinServer;
+        SkinFace.Source = SkinStore.Face();
+        ready = true;
+    }
+
+    bool ready;
+
+    async Task PushSkinAsync()
+    {
+        var nick = NickBox.Text.Trim();
+        StatusText.Text = SkinStore.Has ? "Скин сохранён" : "Скин не выбран";
+        if (cfg.SkinServer.Trim() == "" || !SkinStore.Has) return;
+        StatusText.Text = "Загружаю скин на сервер...";
+        var err = await SkinStore.UploadAsync(cfg, nick);
+        StatusText.Text = err ?? "Скин загружен: его увидят другие игроки с Enchanted";
+    }
+
+    async void PickSkin_Click(object s, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Скин (PNG 64x64)|*.png", Title = "Выбери скин" };
+        if (dlg.ShowDialog(this) != true) return;
+        var err = SkinStore.Import(dlg.FileName);
+        if (err != null) { StatusText.Text = "Скин: " + err; return; }
+        SkinFace.Source = SkinStore.Face();
+        cfg.SkinServer = SkinServerBox.Text.Trim();
+        cfg.Save();
+        await PushSkinAsync();
+    }
+
+    async void Slim_Changed(object s, RoutedEventArgs e)
+    {
+        if (!ready) return;
+        cfg.SkinSlim = SlimBox.IsChecked == true;
+        cfg.Save();
+        await PushSkinAsync();
+    }
+
+    async void SkinServer_LostFocus(object s, RoutedEventArgs e)
+    {
+        var v = SkinServerBox.Text.Trim();
+        if (v == cfg.SkinServer) return;
+        cfg.SkinServer = v;
+        cfg.Save();
+        await PushSkinAsync();
     }
 
     void Title_Down(object s, MouseButtonEventArgs e) { if (e.ButtonState == MouseButtonState.Pressed) DragMove(); }
@@ -50,6 +95,7 @@ public partial class MainWindow : Window
         cfg.Version = Mc;
         cfg.Mirrors = S1.IsChecked == true;
         cfg.VerifyFiles = VerifyBox.IsChecked == true;
+        cfg.SkinServer = SkinServerBox.Text.Trim();
         cfg.Save();
 
         PlayBtn.IsEnabled = false;
