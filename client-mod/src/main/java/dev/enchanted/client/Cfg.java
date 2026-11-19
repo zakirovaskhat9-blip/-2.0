@@ -14,9 +14,9 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 
-/** Настройки клиента: модули, их параметры, клавиши, позиции HUD, сохранение в config/enchanted-client.json. */
+/** Настройки клиента: модули, их параметры, клавиши, позиции HUD, сохранение в config/lt6.json. */
 public final class Cfg {
-	static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("enchanted-client.json");
+	static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("lt6.json");
 
 	// ---- темы интерфейса: основной цвет + второй цвет для градиентов ----
 	static final String[] THEMES = {"Белый", "Океан", "Аметист", "Рубин", "Янтарь", "Неон", "Закат", "Мята"};
@@ -138,35 +138,40 @@ public final class Cfg {
 
 	static final String VIS = "Visuals", HUD = "HUD";
 
-	// ---- 1. Target ESP (вращающийся ромб как в Nursultan, два вида) ----
-	public static final Choice ESP_STYLE = new Choice("style", "Вид", 1, "1: Ромб", "2: Скобки");
-	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Ромб на цели боя (как в Nursultan)", VIS, true, ESP_STYLE);
+	// LT6 — all new visuals, no legacy modules.
+	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 0, "Nursultan Square", "Celestial Corners");
+	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Подсветка цели: Nursultan / Celestial", VIS, true, ESP_STYLE);
 
-	// ---- 2. Custom Sky (только выбор неба) ----
 	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
-	public static final Module SKY = new Module("sky", "Custom Sky", "Своё небо: без солнца, луны и облаков", VIS, false, SKY_PRESET);
+	public static final Module SKY = new Module("sky", "Custom Sky", "Шесть новых панорам от автора", VIS, false, SKY_PRESET);
 
-	// ---- 3. FPS (просто счётчик) ----
-	public static final Module FPS = new Module("fps", "FPS", "Счётчик кадров в секунду", HUD, true);
+	public static final Module FPS = new Module("fps", "FPS Counter", "Частота кадров", HUD, true);
 
-	// ---- 4. HP противника под прицелом ----
-	public static final Choice AH_STYLE = new Choice("style", "Вид", 0, "Панель", "Цифры под прицелом");
-	public static final Module AIMHP = new Module("aimhp", "Enemy HP", "Здоровье противника под прицелом", HUD, true, AH_STYLE);
+	public static final Color HIT_TINT = new Color("color", "Цвет попадания", 1);
+	public static final Slider HIT_SIZE = new Slider("size", "Размер частиц", 0.5, 2.5, 0.1, 1.0, "x");
+	public static final Module HIT_COLOR = new Module("hit_color", "Hit Color", "Цветные частицы при ударе", VIS, true, HIT_TINT, HIT_SIZE);
 
-	// ---- 5. Armor Status ----
-	public static final Bool AR_DUR = new Bool("dur", "Прочность в процентах", true);
-	public static final Bool AR_VERT = new Bool("vert", "Столбиком (иначе в ряд)", true);
-	public static final Module ARMOR = new Module("armor", "Armor Status", "Броня и её прочность", HUD, true, AR_DUR, AR_VERT);
+	public static final Slider WARMTH = new Slider("warmth", "Температура цвета", -100, 100, 5, 0, "%");
+	public static final Module FILTER = new Module("filter", "Color Filter", "Тёплый/холодный фильтр", VIS, false, WARMTH);
 
-	// ---- оформление интерфейса (вкладка «Тема») ----
-	public static final Slider UI_OPACITY = new Slider("opacity", "Прозрачность плашек", 30, 100, 5, 72, "%");
-	public static final Slider UI_ROUND = new Slider("round", "Скругление", 0, 8, 1, 4, " px");
-	public static final Bool UI_GLOW = new Bool("glow", "Тени и свечение", true);
-	public static final Bool UI_PART = new Bool("particles", "Частицы в меню", true);
-	public static final Bool UI_BLUR = new Bool("blur", "Размытие фона меню (нагружает GPU)", false);
-	public static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR);
+	public static final Slider CONTRAST_POWER = new Slider("contrast", "Контраст", -50, 50, 5, 0, "%");
+	public static final Module CONTRAST = new Module("contrast", "Contrast", "Контрастность через затемнение/подсветку", VIS, false, CONTRAST_POWER);
 
-	static final List<Module> ALL = List.of(TARGET_ESP, SKY, FPS, AIMHP, ARMOR);
+	public static final Slider BRIGHTNESS_LEVEL = new Slider("level", "Яркость", 0.2, 2.0, 0.1, 1.0, "x");
+	public static final Module BRIGHTNESS = new Module("brightness", "Brightness", "Уровень гаммы", VIS, false, BRIGHTNESS_LEVEL);
+
+	public static final Color JUMP_TINT = new Color("color", "Цвет круга", 5);
+	public static final Slider JUMP_RADIUS = new Slider("radius", "Радиус", 0.6, 2.5, 0.1, 1.2, "м");
+	public static final Module JUMP_CIRCLES = new Module("jump_circles", "Jump Circles", "Кольцо частиц при прыжке и приземлении", VIS, true, JUMP_TINT, JUMP_RADIUS);
+
+	static final Slider UI_OPACITY = new Slider("opacity", "Прозрачность плашек", 30, 100, 5, 72, "%");
+	static final Slider UI_ROUND = new Slider("round", "Скругление", 0, 8, 1, 4, " px");
+	static final Bool UI_GLOW = new Bool("glow", "Тени и свечение", true);
+	static final Bool UI_PART = new Bool("particles", "Частицы в меню", true);
+	static final Bool UI_BLUR = new Bool("blur", "Размытие меню", false);
+	static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR);
+
+	static final List<Module> ALL = List.of(TARGET_ESP, SKY, FPS, HIT_COLOR, FILTER, CONTRAST, BRIGHTNESS, JUMP_CIRCLES);
 
 	static Options opts() { return Minecraft.getInstance().options; }
 

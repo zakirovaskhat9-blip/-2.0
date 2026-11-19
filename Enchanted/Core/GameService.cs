@@ -22,16 +22,18 @@ public sealed class GameService
         Mirror.OnRequestAttempt = Touch;
     }
 
-    /// <summary>Мод-меню Enchanted (левый Shift) кладём только на 1.21.11, на остальных версиях убираем.</summary>
+    /// <summary>LT6 визуальный мод (правый Shift) кладём только на 1.21.11, на остальных версиях убираем.</summary>
     void InstallClientMod(string mc)
     {
         var dir = Dirs.Mods(mc);
         Directory.CreateDirectory(dir);
         foreach (var f in Directory.GetFiles(dir, "enchanted-client*.jar")) { try { File.Delete(f); } catch { } }
+        // Clean previous LT6 editions as well so only one visual jar is installed.
+        foreach (var f in Directory.GetFiles(dir, "lt6*.jar")) { try { File.Delete(f); } catch { } }
         if (mc != "1.21.11") return;
-        using var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("enchanted-client.jar");
+        using var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("lt6.jar");
         if (s == null) { Log.W("клиентский мод не встроен в exe"); return; }
-        using var o = File.Create(Path.Combine(dir, "enchanted-client.jar"));
+        using var o = File.Create(Path.Combine(dir, "lt6.jar"));
         s.CopyTo(o);
     }
 

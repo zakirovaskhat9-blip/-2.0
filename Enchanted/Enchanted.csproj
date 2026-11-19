@@ -22,8 +22,8 @@
   <ItemGroup>
     <Resource Include="enchanted.ico" />
   </ItemGroup>
-  <ItemGroup Condition="Exists('client_mod/enchanted-client.jar')">
-    <EmbeddedResource Include="client_mod/enchanted-client.jar" LogicalName="enchanted-client.jar" />
+  <ItemGroup Condition="Exists('client_mod/lt6.jar')">
+    <EmbeddedResource Include="client_mod/lt6.jar" LogicalName="lt6.jar" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="System" />

@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "id": "enchanted_client",
-  "version": "2.2.0",
-  "name": "Enchanted Client",
-  "description": "Minimal Enchanted client integration for player skins. No ESP, HUD, GUI, animations or custom skies.",
+  "id": "lt6",
+  "version": "1.0.0",
+  "name": "LT6",
+  "description": "LT6 visual modules, in-game GUI, HUD, custom sky and skin support for Fabric 1.21.11",
   "authors": [
-    "Enchanted"
+    "LT6MS"
   ],
   "license": "CC0-1.0",
   "environment": "client",
   "entrypoints": {
     "client": [
-      "dev.enchanted.client.EnchantedClient"
+      "dev.enchanted.client.LT6Client"
     ]
   },
   "mixins": [

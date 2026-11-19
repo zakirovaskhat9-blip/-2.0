@@ -32,7 +32,7 @@ public abstract class ProbeMixin {
 		} else if (attr == EnvironmentAttributes.CLOUD_COLOR) {
 			res = Integer.valueOf(0); // полностью прозрачные облака = облаков нет
 		} else if (attr == EnvironmentAttributes.STAR_BRIGHTNESS) {
-			res = Float.valueOf(d.stars ? 1.0f : 0.0f);
+			res = Float.valueOf(0.0f);
 		}
 		if (res != null) cir.setReturnValue((V) res);
 	}

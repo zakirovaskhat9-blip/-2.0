@@ -73,7 +73,7 @@ public final class Skins {
             }
             Files.createDirectories(DISK);
         } catch (Exception exception) {
-            System.err.println("[Enchanted Skins] Config error: " + exception);
+            System.err.println("[LT6 Skins] Config error: " + exception);
         }
     }
 
@@ -91,7 +91,7 @@ public final class Skins {
             o.addProperty("selectedNick", selectedNick);
             Files.createDirectories(CONFIG.getParent());
             Files.writeString(CONFIG, o.toString());
-        } catch (Exception ex) { System.err.println("[Enchanted Skins] Save failed: " + ex); }
+        } catch (Exception ex) { System.err.println("[LT6 Skins] Save failed: " + ex); }
         return true;
     }
 
@@ -104,7 +104,7 @@ public final class Skins {
                 o.remove("selectedNick");
                 Files.writeString(CONFIG, o.toString());
             }
-        } catch (Exception ex) { System.err.println("[Enchanted Skins] Reset failed: " + ex); }
+        } catch (Exception ex) { System.err.println("[LT6 Skins] Reset failed: " + ex); }
     }
 
     public static String current() { return selectedNick.isBlank() ? "по умолчанию" : selectedNick; }
@@ -123,7 +123,7 @@ public final class Skins {
             IO.execute(() -> {
                 try { fetch(lookupName, entry); }
                 catch (Exception ex) {
-                    System.err.println("[Enchanted Skins] " + lookupName + ": " + ex);
+                    System.err.println("[LT6 Skins] " + lookupName + ": " + ex);
                     entry.checked = System.currentTimeMillis();
                 } finally { BUSY.remove(key); }
             });
@@ -173,7 +173,7 @@ public final class Skins {
     private static Download request(String url, String modelHeader) {
         try {
             HttpResponse<byte[]> response = HTTP.send(HttpRequest.newBuilder(URI.create(url))
-                    .timeout(Duration.ofSeconds(8)).header("User-Agent", "EnchantedClient/2.3")
+                    .timeout(Duration.ofSeconds(8)).header("User-Agent", "LT6/1.0")
                     .GET().build(), HttpResponse.BodyHandlers.ofByteArray());
             byte[] bytes = response.body();
             if (response.statusCode() != 200 || bytes.length < 24 || bytes.length > 65536 ||
@@ -186,7 +186,7 @@ public final class Skins {
         try {
             NativeImage img = NativeImage.read(new ByteArrayInputStream(skin.bytes()));
             if (img.getWidth() != 64 || img.getHeight() != 64) { img.close(); return; }
-            DynamicTexture texture = new DynamicTexture(() -> "Enchanted player skin", img);
+            DynamicTexture texture = new DynamicTexture(() -> "LT6 player skin", img);
             texture.upload();
             Identifier id = Identifier.fromNamespaceAndPath("enchanted_client", "skins/skin_" + System.nanoTime());
             Minecraft.getInstance().getTextureManager().register(id, texture);
@@ -196,7 +196,7 @@ public final class Skins {
             entry.found = true;
             entry.checked = System.currentTimeMillis();
         } catch (Exception ex) {
-            System.err.println("[Enchanted Skins] Texture upload: " + ex);
+            System.err.println("[LT6 Skins] Texture upload: " + ex);
             entry.checked = System.currentTimeMillis();
         }
     }

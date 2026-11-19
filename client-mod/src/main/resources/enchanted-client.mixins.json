@@ -4,7 +4,9 @@
   "package": "dev.enchanted.client.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "SkinMixin"
+    "SkinMixin",
+    "ProbeMixin",
+    "SkyBodiesMixin"
   ],
   "injectors": {
     "defaultRequire": 0

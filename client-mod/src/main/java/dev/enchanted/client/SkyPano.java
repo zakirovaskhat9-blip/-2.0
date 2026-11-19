@@ -4,60 +4,40 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
-
 import net.minecraft.client.Minecraft;
 
-/** Рисует небо-куб из картинок через ванильный CubeMap (панорама главного меню). Всё через reflection: при несовпадении API тихо отключается. */
+/** Cubemap bridge for the current Mojang-mapped 1.21.11 renderer. */
 public final class SkyPano {
-	private static final Map<String, Object> MAPS = new HashMap<>();
-	private static boolean dead;
-	private static Method render;
-
-	private static Object id(String path) throws Exception {
-		Class<?> c;
-		try {
-			c = Class.forName("net.minecraft.resources.Identifier");
-		} catch (ClassNotFoundException e) {
-			c = Class.forName("net.minecraft.resources.ResourceLocation");
-		}
-		return c.getMethod("fromNamespaceAndPath", String.class, String.class).invoke(null, "enchanted_client", path);
-	}
-
-	/** Вызывать из рендера неба. true - небо нарисовано. */
-	public static boolean draw(Minecraft mc) {
-		if (dead || !Cfg.SKY.enabled) return false;
-		SkyLib.Def d = SkyLib.current(Cfg.SKY_PRESET.idx);
-		if (d == null || d.pano == null || mc.gameRenderer == null) return false;
-		try {
-			Object cm = MAPS.get(d.pano);
-			if (cm == null) {
-				Object base = id("textures/gui/sky/" + d.pano);
-				Constructor<?> k = null;
-				for (Constructor<?> c : Class.forName("net.minecraft.client.renderer.CubeMap").getConstructors()) {
-					if (c.getParameterCount() == 1) k = c;
-				}
-				cm = k.newInstance(base);
-				MAPS.put(d.pano, cm);
-				try {
-					cm.getClass().getMethod("registerTextures", Class.forName("net.minecraft.client.renderer.texture.TextureManager"))
-							.invoke(cm, mc.getTextureManager());
-				} catch (Exception ignored) {
-				}
-			}
-			if (render == null) {
-				for (Method m : cm.getClass().getMethods()) {
-					if (m.getName().equals("render") && m.getParameterCount() >= 3 && m.getParameterTypes()[0] == Minecraft.class) render = m;
-				}
-			}
-			var cam = mc.gameRenderer.getMainCamera();
-			Object[] args = render.getParameterCount() == 3
-					? new Object[] {mc, cam.xRot(), cam.yRot() + 180f}
-					: new Object[] {mc, cam.xRot(), cam.yRot() + 180f, 1f};
-			render.invoke(cm, args);
-			return true;
-		} catch (Throwable t) {
-			dead = true;
-			return false;
-		}
-	}
+    private static final Map<String,Object> MAPS=new HashMap<>();
+    private static Method draw;
+    private static boolean failed;
+    private SkyPano() {}
+    public static boolean available() {return !failed;}
+    public static boolean draw(Minecraft mc) {
+        if (failed || !Cfg.SKY.enabled || mc.level==null) return false;
+        try {
+            SkyLib.Def def=SkyLib.current(Cfg.SKY_PRESET.idx);
+            Object cube=MAPS.get(def.pano);
+            if (cube==null) {
+                Class<?> ident=Class.forName("net.minecraft.resources.Identifier");
+                Object id=ident.getMethod("fromNamespaceAndPath",String.class,String.class)
+                  .invoke(null,"enchanted_client","textures/gui/sky/"+def.pano);
+                Class<?> renderer=Class.forName("net.minecraft.client.renderer.CubeMap");
+                Constructor<?> constructor=renderer.getConstructor(ident);
+                cube=constructor.newInstance(id);
+                renderer.getMethod("registerTextures", Class.forName("net.minecraft.client.renderer.texture.TextureManager"))
+                  .invoke(cube, mc.getTextureManager());
+                draw=renderer.getMethod("render",Minecraft.class,float.class,float.class);
+                MAPS.put(def.pano,cube);
+            }
+            if(draw==null) draw=cube.getClass().getMethod("render",Minecraft.class,float.class,float.class);
+            var camera=mc.gameRenderer.getMainCamera();
+            draw.invoke(cube,mc,camera.xRot(),camera.yRot());
+            return true;
+        } catch(Throwable error) {
+            failed=true;
+            org.slf4j.LoggerFactory.getLogger("LT6").warn("Custom Sky disabled: renderer not compatible",error);
+            return false;
+        }
+    }
 }
