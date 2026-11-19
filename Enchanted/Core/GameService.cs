@@ -22,19 +22,66 @@ public sealed class GameService
         Mirror.OnRequestAttempt = Touch;
     }
 
-    /// <summary>LT6 визуальный мод (левый Shift) кладём только на 1.21.11, на остальных версиях убираем.</summary>
+    /// <summary>LT6 работает на Minecraft 1.21.11; обязательный JAR вшит в EXE.</summary>
     void InstallClientMod(string mc)
     {
         var dir = Dirs.Mods(mc);
         Directory.CreateDirectory(dir);
-        foreach (var f in Directory.GetFiles(dir, "enchanted-client*.jar")) { try { File.Delete(f); } catch { } }
-        // Clean previous LT6 editions as well so only one visual jar is installed.
-        foreach (var f in Directory.GetFiles(dir, "lt6*.jar")) { try { File.Delete(f); } catch { } }
-        if (mc != "1.21.11") return;
-        using var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("lt6.jar");
-        if (s == null) { Log.W("клиентский мод не встроен в exe"); return; }
-        using var o = File.Create(Path.Combine(dir, "lt6.jar"));
-        s.CopyTo(o);
+        var target = Path.Combine(dir, "lt6.jar");
+
+        if (mc != "1.21.11")
+        {
+            // На 1.21.4 установленный LT6 1.21.11 не должен ломать игру.
+            foreach (var old in Directory.GetFiles(dir, "lt6*.jar"))
+                try { File.Delete(old); } catch (Exception e) { Log.W("LT6 cleanup: " + e.Message); }
+            return;
+        }
+
+        using var source = Assembly.GetExecutingAssembly().GetManifestResourceStream("lt6.jar")
+            ?? throw new InvalidOperationException(
+                "LT6 не встроен в EXE лаунчера. Пересобери LT6MS Launcher через GitHub Actions; файл lt6.jar обязателен.");
+
+        // Не оставляем нулевой/битый lt6.jar: скачанный мод должен содержать
+        // Fabric manifest и клиентский entrypoint.
+        var temp = target + ".installing";
+        try
+        {
+            using (var output = File.Create(temp)) source.CopyTo(output);
+            using (var archive = System.IO.Compression.ZipFile.OpenRead(temp))
+            {
+                if (archive.GetEntry("fabric.mod.json") == null ||
+                    archive.GetEntry("dev/enchanted/client/LT6Client.class") == null)
+                    throw new InvalidDataException("Неверный lt6.jar: нет fabric.mod.json или LT6Client.class");
+            }
+            // Не переписываем существующий корректный JAR на каждом запуске.
+            // Это предотвращает ошибки доступа, когда предыдущий Minecraft ещё запущен.
+            bool sameJar = false;
+            if (File.Exists(target))
+            {
+                using var candidate = File.OpenRead(temp);
+                using var installed = File.OpenRead(target);
+                sameJar = candidate.Length == installed.Length &&
+                    System.Security.Cryptography.SHA256.HashData(candidate).AsSpan()
+                        .SequenceEqual(System.Security.Cryptography.SHA256.HashData(installed));
+            }
+            // Убираем только копии LT6 под известным устаревшим именем.
+            foreach (var old in Directory.GetFiles(dir, "enchanted-client*.jar"))
+                File.Delete(old);
+            foreach (var old in Directory.GetFiles(dir, "lt6*.jar"))
+                if (!Path.GetFullPath(old).Equals(Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase))
+                    File.Delete(old);
+            if (!sameJar) File.Move(temp, target, overwrite: true);
+            Log.W($"LT6 проверен: {target}, {new FileInfo(target).Length} байт, {(sameJar ? "без замены" : "обновлён")}");
+        }
+        catch (Exception ex)
+        {
+            Log.W("LT6 install failed: " + ex);
+            throw new IOException("Не удалось установить визуальный мод LT6: " + ex.GetBaseException().Message, ex);
+        }
+        finally
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+        }
     }
 
     long lastTick = Environment.TickCount64;
@@ -168,6 +215,16 @@ public sealed class GameService
         }
         var mods = new ModManager(Http, cfg);
         int missing = await mods.EnsureAsync(mc, status, row, ct);
+        if (mc == "1.21.11")
+        {
+            var modsDir = Dirs.Mods(mc);
+            if (!File.Exists(Path.Combine(modsDir, "lt6.jar")))
+                throw new FileNotFoundException("LT6 отсутствует после установки.", Path.Combine(modsDir, "lt6.jar"));
+            // LT6 использует Fabric API; без него запуск не имеет смысла.
+            if (!Directory.EnumerateFiles(modsDir, "*.jar")
+                    .Any(f => Path.GetFileName(f).StartsWith("fabric-api-", StringComparison.OrdinalIgnoreCase)))
+                throw new IOException("Не удалось установить Fabric API — он обязателен для LT6. Проверь сеть и launcher.log.");
+        }
 
         var opt = new MLaunchOption
         {
@@ -200,8 +257,15 @@ public sealed class GameService
         }
 
         // у каждой версии своя папка игрока (библиотеки общие)
-        proc.StartInfo.Arguments = Regex.Replace(proc.StartInfo.Arguments, @"--gameDir\s+(""[^""]*""|\S+)", "--gameDir \"" + gameDir + "\"");
+        // CmlLib может сгенерировать аргументы без --gameDir. В этом случае
+        // моды из Dirs.Mods(mc) иначе будут установлены не туда, где их ищет Fabric.
+        const string gameDirPattern = @"--gameDir\s+(""[^""]*""|\S+)";
+        var gameDirOption = "--gameDir \"" + gameDir + "\"";
+        proc.StartInfo.Arguments = Regex.IsMatch(proc.StartInfo.Arguments, gameDirPattern)
+            ? Regex.Replace(proc.StartInfo.Arguments, gameDirPattern, gameDirOption)
+            : proc.StartInfo.Arguments + " " + gameDirOption;
         proc.StartInfo.WorkingDirectory = gameDir;
+        Log.W($"Minecraft version={versionName}, gameDir={gameDir}, mods={Dirs.Mods(mc)}, lt6={(File.Exists(Path.Combine(Dirs.Mods(mc), "lt6.jar")) ? "installed" : "not-installed")}");
         proc.StartInfo.RedirectStandardOutput = true;
         proc.StartInfo.RedirectStandardError = true;
         var gameLog = Path.Combine(Dirs.Root, "game-output.log");

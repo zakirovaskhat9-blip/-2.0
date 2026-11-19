@@ -22,9 +22,12 @@
   <ItemGroup>
     <Resource Include="enchanted.ico" />
   </ItemGroup>
-  <ItemGroup Condition="Exists('client_mod/lt6.jar')">
+  <ItemGroup>
     <EmbeddedResource Include="client_mod/lt6.jar" LogicalName="lt6.jar" />
   </ItemGroup>
+  <Target Name="EnsureLT6Jar" BeforeTargets="PrepareForBuild" Condition="!Exists('client_mod/lt6.jar')">
+    <Error Text="LT6 JAR missing. Build client-mod and copy lt6-*.jar into Enchanted/client_mod/lt6.jar before dotnet publish." />
+  </Target>
   <ItemGroup>
     <Using Include="System" />
     <Using Include="System.IO" />

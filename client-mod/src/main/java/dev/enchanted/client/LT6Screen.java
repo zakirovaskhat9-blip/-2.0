@@ -191,7 +191,7 @@ public class LT6Screen extends Screen {
 			});
 		}
 
-		Gfx.str(g, f, "Меню: левый Shift", px + 17, py + ph - 26, DIM);
+		Gfx.str(g, f, "Меню: правый Shift", px + 17, py + ph - 26, DIM);
 	}
 
 	private void icon(GuiGraphics g, int i, int x, int y, int c) {

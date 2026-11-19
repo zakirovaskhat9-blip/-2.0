@@ -21,7 +21,7 @@ public final class LT6Keys {
         openGui = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.lt6.open_gui",
                 InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_LEFT_SHIFT,
+                GLFW.GLFW_KEY_RIGHT_SHIFT,
                 CATEGORY));
     }
 
@@ -38,7 +38,12 @@ public final class LT6Keys {
         if (mc.player == null || mc.level == null || mc.screen != null) return;
         if (pressed || openRequested) {
             openRequested = false;
-            mc.setScreen(new LT6Screen());
+            try {
+                mc.setScreen(new LT6Screen());
+            } catch (RuntimeException error) {
+                org.slf4j.LoggerFactory.getLogger("LT6").error("Cannot open LT6 GUI", error);
+                throw error;
+            }
         }
     }
 }
