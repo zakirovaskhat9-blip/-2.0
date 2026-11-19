@@ -60,7 +60,7 @@ public final class LT6Client implements ClientModInitializer {
                             cmd.getSource().sendFeedback(Component.literal("Ник должен содержать 3–16 символов: A-Z, 0-9, _."));
                         }
                         return 1;
-                    }))));
+                    })));
         });
     }
 }
