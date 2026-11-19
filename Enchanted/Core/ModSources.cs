@@ -179,16 +179,41 @@ public sealed class ModManager
             try { File.Delete(Path.Combine(dir, Path.GetFileName(filename))); } catch { }
             man.Remove(key);
         }
-        // Dependencies are resolved afresh. Remove tracked legacy dependencies first.
+        // Не удаляем зависимости при каждом старте: это вызывало
+        // повторное скачивание даже при полностью установленной игре.
+        bool lostDependency = false;
         foreach (var (key, filename) in man.ToArray())
-        {
-            if (!key.StartsWith("dep:")) continue;
-            try { File.Delete(Path.Combine(dir, Path.GetFileName(filename))); } catch { }
-            man.Remove(key);
-        }
+            if (key.StartsWith("dep:") && !File.Exists(Path.Combine(dir, Path.GetFileName(filename))))
+            {
+                man.Remove(key);
+                lostDependency = true;
+            }
         SaveMan();
         const int MaxMods = 12;
         int CountJars() => Directory.GetFiles(dir, "*.jar").Length;
+        var completeFile = Path.Combine(dir, ".lt6ms-mods-ready.txt");
+        var expectedMods = string.Join("|", Const.Mods(mc));
+
+        // Только после полного успешного прохода можно обходиться без сети.
+        if (!cfg.VerifyFiles && !lostDependency && File.Exists(completeFile) &&
+            File.ReadAllText(completeFile) == expectedMods &&
+            Const.Mods(mc).All(slug =>
+                man.TryGetValue(slug, out var file) && File.Exists(Path.Combine(dir, Path.GetFileName(file)))) &&
+            man.Where(kv => kv.Key.StartsWith("dep:")).All(kv =>
+                File.Exists(Path.Combine(dir, Path.GetFileName(kv.Value)))))
+        {
+            foreach (var slug in Const.Mods(mc))
+                row(new ModRow { Name = slug, State = "установлен", Dot = Green });
+            status("Все моды на месте — запускаю без запросов к серверам...");
+            return 0;
+        }
+
+        async Task<ModFile?> FindQuick(ModSource source, string id)
+        {
+            using var requestCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            requestCts.CancelAfter(TimeSpan.FromSeconds(3));
+            return await source.FindAsync(id, mc, requestCts.Token);
+        }
 
         // 1. свои jar-ы рядом с exe: mods_bundle/<версия>/ или mods_bundle/
         var bundleNames = new List<string>();
@@ -214,7 +239,7 @@ public sealed class ModManager
         {
             status("Проверяю релиз с модами...");
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(10));
+            cts.CancelAfter(TimeSpan.FromSeconds(4));
             var js = await http.GetStringAsync(relBase + "index.json", cts.Token);
             rel = JsonSerializer.Deserialize<ReleaseIndex>(js, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         }
@@ -222,7 +247,7 @@ public sealed class ModManager
 
         // 3. онлайн-источники: Modrinth (если доступен), зеркало MCIM, CurseForge
         status("Проверяю связь с Modrinth...");
-        bool mrUp = await Ping("https://api.modrinth.com/v2/", 5);
+        bool mrUp = await Ping("https://api.modrinth.com/v2/", 3);
         var sources = new List<ModSource>();
         if (mrUp) sources.Add(new ModrinthSource(http, "Modrinth", "https://api.modrinth.com"));
         sources.Add(new ModrinthSource(http, "MCIM", "https://mod.mcimirror.top/modrinth", "https://cdn.modrinth.com", "https://mod.mcimirror.top"));
@@ -234,6 +259,7 @@ public sealed class ModManager
         var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var pending = new Queue<string>();
         int missing = 0;
+        bool depFailed = false;
 
         async Task<bool> Install(string key, ModFile f, string via)
         {
@@ -274,7 +300,7 @@ public sealed class ModManager
             {
                 try
                 {
-                    file = await src.FindAsync(slug, mc, ct);
+                    file = await FindQuick(src, slug);
                     if (file != null) { await Install(slug, file, src.Label); break; }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -294,7 +320,7 @@ public sealed class ModManager
             foreach (var (s, fn) in rel.Deps)
             {
                 try { if (!(man.TryGetValue("dep:" + s, out var h) && File.Exists(Path.Combine(dir, h)))) await Install("dep:" + s, new ModFile(fn, relBase + Uri.EscapeDataString(fn), null, null, null, s, "Release", new()), "Release"); }
-                catch (Exception e) { Log.W($"dep {s}: {e.Message}"); }
+                catch (Exception e) { depFailed = true; Log.W($"dep {s}: {e.Message}"); }
             }
         int guard = 0;
         while (pending.Count > 0 && guard++ < 60)
@@ -307,21 +333,35 @@ public sealed class ModManager
             {
                 if (id.StartsWith("cf:") && cf != null)
                 {
-                    var sl = await cf.SlugOf(id, ct);
+                    using var slugCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    slugCts.CancelAfter(TimeSpan.FromSeconds(3));
+                    var sl = await cf.SlugOf(id, slugCts.Token);
                     if (sl != null && done.Contains(sl)) continue;
                 }
+                bool foundDependency = false;
                 foreach (var src in sources)
                 {
                     if ((src is CurseForgeSource) != id.StartsWith("cf:")) continue;
-                    var f = await src.FindAsync(id, mc, ct);
+                    var f = await FindQuick(src, id);
                     if (f == null) continue;
                     await Install("dep:" + id, f, src.Label);
                     foreach (var d in f.Deps) pending.Enqueue(d);
+                    foundDependency = true;
                     break;
                 }
+                if (!foundDependency) depFailed = true;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception e) { Log.W($"dep {id}: {e.Message}"); }
+            catch (Exception e) { depFailed = true; Log.W($"dep {id}: {e.Message}"); }
+        }
+        if (missing == 0 && !depFailed && pending.Count == 0)
+        {
+            try { File.WriteAllText(completeFile, expectedMods); }
+            catch (Exception e) { Log.W("mods cache marker: " + e.Message); }
+        }
+        else
+        {
+            try { File.Delete(completeFile); } catch { }
         }
         return missing;
     }
@@ -329,19 +369,26 @@ public sealed class ModManager
     async Task Download(ModFile f, string path, CancellationToken ct)
     {
         Exception? last = null;
-        foreach (var url in new[] { f.Url, f.Alt }.Where(u => u != null))
+        var urls = new[] { f.Url, f.Alt }
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .Select(u => u!)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        // Сначала один раз пробуем каждый адрес. При ошибке переключаемся
+        // на зеркало за 250 мс, а не трижды ждём один нерабочий сервер.
+        for (int round = 0; round < 2; round++)
         {
-            for (int attempt = 0; attempt < 3; attempt++)
+            foreach (var url in urls)
             {
+                ct.ThrowIfCancellationRequested();
                 try
                 {
-                    // 5 секунд тишины - обрыв и повтор (12 с на ответ сервера)
+                    // Не более 5 с без ответа / без очередного блока данных.
                     using var sc = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    sc.CancelAfter(TimeSpan.FromSeconds(12));
+                    sc.CancelAfter(TimeSpan.FromSeconds(5));
                     using var resp = await http.GetAsync(url!, HttpCompletionOption.ResponseHeadersRead, sc.Token);
                     resp.EnsureSuccessStatusCode();
                     using var stream = await resp.Content.ReadAsStreamAsync(sc.Token);
-                    var ms = new MemoryStream();
+                    using var ms = new MemoryStream();
                     var buf = new byte[81920];
                     int n;
                     while ((n = await stream.ReadAsync(buf, sc.Token)) > 0)
@@ -360,7 +407,12 @@ public sealed class ModManager
                     return;
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                catch (Exception e) { last = e; }
+                catch (Exception e)
+                {
+                    last = e;
+                    Log.W($"мод {f.Name}, {url}, раунд {round + 1}: {e.GetBaseException().Message}");
+                    await Task.Delay(250, ct);
+                }
             }
         }
         throw last ?? new IOException("не удалось скачать " + f.Name);

@@ -19,6 +19,7 @@ public sealed class GameService
         this.cfg = cfg;
         Http = new HttpClient(Mirror) { Timeout = Timeout.InfiniteTimeSpan };
         Http.DefaultRequestHeaders.UserAgent.ParseAdd(Const.UserAgent);
+        Mirror.OnRequestAttempt = Touch;
     }
 
     /// <summary>Мод-меню Enchanted (левый Shift) кладём только на 1.21.11, на остальных версиях убираем.</summary>
@@ -36,59 +37,68 @@ public sealed class GameService
 
     long lastTick = Environment.TickCount64;
     volatile bool started;
-    void Touch() { Interlocked.Exchange(ref lastTick, Environment.TickCount64); started = true; }
+    void Touch()
+    {
+        Interlocked.Exchange(ref lastTick, Environment.TickCount64);
+        started = true;
+    }
 
     /// <summary>
-    /// Выполняет загрузку; если 5 секунд нет ни байта прогресса - прерывает и запускает заново
-    /// (уже скачанные файлы CmlLib пропускает). До первого прогресса даём 20 с на подготовку.
+    /// Пять секунд тишины после начала сетевой работы — отмена и быстрый повтор.
+    /// До первого запроса допускаем 8 секунд на локальную подготовку файлов,
+    /// чтобы не обрывать проверку файлов без сетевого трафика.
     /// </summary>
     async Task Guard(Func<CancellationToken, Task> work, Action<string> status, CancellationToken ct)
     {
-        int stalls = 0, errors = 0;
+        int failures = 0;
         while (true)
         {
             ct.ThrowIfCancellationRequested();
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             started = false;
-            Touch();
-            started = false;
-            bool stalled = false;
-            _ = Task.Run(async () =>
+            Interlocked.Exchange(ref lastTick, Environment.TickCount64);
+            int stalled = 0;
+
+            var watcher = Task.Run(async () =>
             {
-                while (!cts.IsCancellationRequested)
+                try
                 {
-                    await Task.Delay(500).ConfigureAwait(false);
-                    long limit = started ? 5000 : 20000;
-                    if (Environment.TickCount64 - Interlocked.Read(ref lastTick) > limit)
+                    while (!cts.IsCancellationRequested)
                     {
-                        stalled = true;
-                        try { cts.Cancel(); } catch { }
+                        await Task.Delay(200, cts.Token).ConfigureAwait(false);
+                        long quietMs = Environment.TickCount64 - Interlocked.Read(ref lastTick);
+                        if (quietMs < (started ? 5000 : 8000)) continue;
+                        Interlocked.Exchange(ref stalled, 1);
+                        cts.Cancel();
                         return;
                     }
                 }
+                catch (OperationCanceledException) { }
             });
+
+            Exception? problem = null;
             try
             {
                 await work(cts.Token).WaitAsync(cts.Token);
                 return;
             }
-            catch (Exception e) when (!ct.IsCancellationRequested)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception e) when (!ct.IsCancellationRequested) { problem = e; }
+            finally
             {
-                if (stalled)
-                {
-                    if (++stalls > 15) throw new IOException("сервер постоянно молчит, попробуй другой источник загрузки");
-                    Log.W($"загрузка встала, перезапуск #{stalls}");
-                    status($"Сервер молчит 5 с - перезапускаю загрузку (попытка {stalls})...");
-                }
-                else
-                {
-                    if (++errors > 3) throw;
-                    Log.W("ошибка загрузки, повтор: " + e.Message);
-                    status("Ошибка загрузки, повторяю...");
-                    await Task.Delay(1000, ct);
-                }
+                cts.Cancel();
+                await watcher.ConfigureAwait(false);
             }
-            finally { try { cts.Cancel(); } catch { } }
+
+            if (++failures > 8)
+                throw new IOException("Загрузка прервалась несколько раз. Проверь сеть и launcher.log.", problem);
+
+            bool wasStalled = Interlocked.CompareExchange(ref stalled, 0, 0) == 1;
+            Log.W($"загрузка: повтор {failures}/8, таймаут={wasStalled}: {problem?.GetBaseException().Message}");
+            status(wasStalled
+                ? $"Нет ответа 5 с — переключаю источник и повторяю ({failures}/8)..."
+                : $"Ошибка загрузки — быстро повторяю ({failures}/8)...");
+            await Task.Delay(wasStalled ? 250 : 500, ct);
         }
     }
 
@@ -118,8 +128,30 @@ public sealed class GameService
         if (File.Exists(fabMarker) && !cfg.VerifyFiles) versionName = File.ReadAllText(fabMarker).Trim();
         else
         {
+            // FabricInstaller.Install не принимает CancellationToken. Не запускаем
+            // его повторно до завершения предыдущей попытки (иначе файлы конфликтуют).
             string vn = "";
-            await Guard(async t => { vn = await new FabricInstaller(Http).Install(mc, path); }, status, ct);
+            for (int attempt = 1; attempt <= 3; attempt++)
+            {
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    using var fabricHttp = new HttpClient(new MirrorHandler { PreferMirror = cfg.Mirrors })
+                    {
+                        Timeout = TimeSpan.FromSeconds(12)
+                    };
+                    fabricHttp.DefaultRequestHeaders.UserAgent.ParseAdd(Const.UserAgent);
+                    vn = await new FabricInstaller(fabricHttp).Install(mc, path);
+                    break;
+                }
+                catch (Exception e) when (attempt < 3 && !ct.IsCancellationRequested)
+                {
+                    Log.W($"Fabric: повтор {attempt}/3: {e.GetBaseException().Message}");
+                    status($"Fabric: переключаю источник, повтор {attempt}/3...");
+                    await Task.Delay(250, ct);
+                }
+            }
+            ct.ThrowIfCancellationRequested();
             versionName = vn;
             File.WriteAllText(fabMarker, versionName);
         }
@@ -142,18 +174,26 @@ public sealed class GameService
             MinimumRamMb = Math.Min(1024, cfg.RamMb),
         };
 
-        Process proc;
+        Process? proc = null;
         if (File.Exists(marker) && !cfg.VerifyFiles)
         {
             status("Быстрый запуск...");
-            proc = await launcher.BuildProcessAsync(versionName, opt, ct);
+            try { proc = await launcher.BuildProcessAsync(versionName, opt, ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception e)
+            {
+                // Повреждённый или неполный кэш не должен ломать все следующие запуски.
+                Log.W("быстрый запуск не удался, восстанавливаю файлы: " + e);
+                try { File.Delete(marker); } catch { }
+                status("Восстанавливаю недостающие файлы игры...");
+            }
         }
-        else
+        if (proc == null)
         {
             status("Проверяю и докачиваю файлы игры...");
             Process? built = null;
             await Guard(async t => { built = await launcher.InstallAndBuildProcessAsync(versionName, opt, t); }, status, ct);
-            proc = built!;
+            proc = built ?? throw new IOException("Не удалось подготовить процесс Minecraft.");
             File.WriteAllText(marker, versionName);
         }
 
@@ -164,12 +204,33 @@ public sealed class GameService
         proc.StartInfo.RedirectStandardError = true;
         var gameLog = Path.Combine(Dirs.Root, "game-output.log");
         File.WriteAllText(gameLog, "");
-        void Pipe(object _, DataReceivedEventArgs e) { if (e.Data != null) try { File.AppendAllText(gameLog, e.Data + Environment.NewLine); } catch { } }
+        var gameLogLock = new object();
+        void Pipe(object _, DataReceivedEventArgs e)
+        {
+            if (e.Data == null) return;
+            try { lock (gameLogLock) File.AppendAllText(gameLog, e.Data + Environment.NewLine); }
+            catch { }
+        }
         proc.OutputDataReceived += Pipe;
         proc.ErrorDataReceived += Pipe;
-        proc.Start();
+        proc.EnableRaisingEvents = true;
+        proc.Exited += (_, _) =>
+        {
+            try
+            {
+                int exitCode = proc.ExitCode;
+                Log.W($"Minecraft завершился с кодом {exitCode}, лог: {gameLog}");
+                if (exitCode != 0) status($"Minecraft закрылся с ошибкой {exitCode}. Проверь game-output.log.");
+            }
+            catch (Exception e) { Log.W("ожидание завершения игры: " + e.Message); }
+        };
+        if (!proc.Start()) throw new IOException("Java-процесс Minecraft не запустился.");
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
+        // Ранние падения больше не скрываются сообщением «Игра запущена».
+        await Task.Delay(750, ct);
+        if (proc.HasExited)
+            throw new IOException($"Minecraft завершился сразу (код {proc.ExitCode}). Проверь {gameLog}.");
         progress(1);
         status(missing > 0 ? $"Игра запущена (модов не найдено: {missing}, см. launcher.log)" : "Игра запущена");
     }

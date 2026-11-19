@@ -21,16 +21,20 @@ public sealed class MirrorHandler : DelegatingHandler
         ["maven.fabricmc.net"] = B + "/maven",
     };
 
-    static readonly SemaphoreSlim Gate = new(6); // одновременных рукопожатий/заголовков (защита от «шторма» TLS)
+    static readonly SemaphoreSlim Gate = new(10); // одновременных рукопожатий/заголовков (защита от «шторма» TLS)
 
     const string Log4j = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Configuration status=\"WARN\"><Appenders><Console name=\"SysOut\" target=\"SYSTEM_OUT\"><PatternLayout pattern=\"[%d{HH:mm:ss}] [%t/%level]: %msg%n\"/></Console></Appenders><Loggers><Root level=\"info\"><AppenderRef ref=\"SysOut\"/></Root></Loggers></Configuration>\n";
 
     public bool PreferMirror { get; set; } = true;
 
+    // Обновляет таймер активности во время переключения адресов.
+    public Action? OnRequestAttempt { get; set; };
+
+
     // запасной канал: только TLS 1.2, HTTP/1.1 (другой отпечаток рукопожатия, как у Python/OpenSSL)
     static readonly HttpMessageInvoker Tls12 = new(new SocketsHttpHandler
     {
-        ConnectTimeout = TimeSpan.FromSeconds(8),
+        ConnectTimeout = TimeSpan.FromSeconds(3),
         AutomaticDecompression = System.Net.DecompressionMethods.All,
         PooledConnectionLifetime = TimeSpan.FromMinutes(5),
         MaxConnectionsPerServer = 16,
@@ -42,7 +46,7 @@ public sealed class MirrorHandler : DelegatingHandler
 
     public MirrorHandler() : base(new SocketsHttpHandler
     {
-        ConnectTimeout = TimeSpan.FromSeconds(8),
+        ConnectTimeout = TimeSpan.FromSeconds(3),
         AutomaticDecompression = System.Net.DecompressionMethods.All,
         PooledConnectionLifetime = TimeSpan.FromMinutes(5),
         MaxConnectionsPerServer = 16,
@@ -65,11 +69,13 @@ public sealed class MirrorHandler : DelegatingHandler
         var mir = req.Method == HttpMethod.Get && orig != null ? Rewrite(orig) : null;
         if (mir == null || orig == null) return await base.SendAsync(req, ct).ConfigureAwait(false);
 
-        // как в обычных лаунчерах: зеркало разными каналами (TLS по умолчанию -> TLS 1.2 -> http), оригинал запасной
-        var http = new UriBuilder(mir) { Scheme = Uri.UriSchemeHttp, Port = -1 }.Uri;
-        var plan = PreferMirror
-            ? new[] { (mir, 0), (mir, 1), (http, 0), (mir, 0), (orig, 0) }
-            : new[] { (orig, 0), (orig, 0), (mir, 0), (mir, 1), (http, 0) };
+        // Через 3 секунды без заголовков переключаемся на другой источник.
+        // Не повторяем один и тот же медленный адрес 5 раз подряд.
+        var plan = mir == orig
+            ? new[] { (mir, 0), (mir, 1) }
+            : PreferMirror
+                ? new[] { (mir, 0), (orig, 0), (mir, 1) }
+                : new[] { (orig, 0), (mir, 0), (mir, 1) };
 
         var errors = new List<string>();
         var dead = new HashSet<Uri>();          // адреса, где файла точно нет (404/403)
@@ -79,14 +85,15 @@ public sealed class MirrorHandler : DelegatingHandler
         {
             var (u, mode) = plan[i];
             if (dead.Contains(u)) continue;
-            if (i > 0) await Task.Delay(i == 1 ? 300 : 900, ct).ConfigureAwait(false);
+            if (i > 0) await Task.Delay(150, ct).ConfigureAwait(false);
 
             await Gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
+                OnRequestAttempt?.Invoke();
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromSeconds(10)); // таймаут только на ответ сервера, очередь не считается
-                var msg = Clone(req, u);
+                cts.CancelAfter(TimeSpan.FromSeconds(3)); // ожидание заголовков, не всей загрузки
+                using var msg = Clone(req, u);
                 var res = mode == 1
                     ? await Tls12.SendAsync(msg, cts.Token).ConfigureAwait(false)
                     : await base.SendAsync(msg, cts.Token).ConfigureAwait(false);
