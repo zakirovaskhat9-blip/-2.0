@@ -11,7 +11,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 
 /** LT6 visuals and skin integration. */
 public final class LT6Client implements ClientModInitializer {
@@ -19,6 +18,7 @@ public final class LT6Client implements ClientModInitializer {
     public void onInitializeClient() {
         Skins.init();
         Cfg.load();
+        LT6Keys.register();
         HudElementRegistry.addFirst(Identifier.fromNamespaceAndPath("lt6", "color_grading"),
             (gui, dt) -> ColorFX.render(gui));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("lt6", "hud"), (gui, dt) -> {
@@ -26,9 +26,9 @@ public final class LT6Client implements ClientModInitializer {
             Hud.render(gui, dt);
         });
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+            LT6Keys.poll(mc);
             if (mc.player == null || mc.level == null) return;
             Binds.poll(mc);
-            LT6Keys.poll(mc);
             JumpFX.tick(mc);
             ColorFX.tick(mc);
             SkyOptions.tick(mc);
@@ -40,7 +40,12 @@ public final class LT6Client implements ClientModInitializer {
             }
             return InteractionResult.PASS;
         });
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> dispatcher.register(
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> {
+            dispatcher.register(ClientCommandManager.literal("lt6").executes(cmd -> {
+                LT6Keys.requestOpen();
+                return 1;
+            }));
+            dispatcher.register(
             ClientCommandManager.literal("eskin")
                 .executes(cmd -> { cmd.getSource().sendFeedback(Component.literal("Скин: " + Skins.current() + ". /eskin <ник> или /eskin reset")); return 1; })
                 .then(ClientCommandManager.argument("nick", StringArgumentType.word())
@@ -56,5 +61,6 @@ public final class LT6Client implements ClientModInitializer {
                         }
                         return 1;
                     }))));
+        });
     }
 }

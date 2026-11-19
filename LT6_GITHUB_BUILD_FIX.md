@@ -2,7 +2,7 @@
 
 Исправлено по логу `SkyLib.scan()` (ошибка в `EnchantedScreen.java`) и старой маске имени JAR.
 
-- Старый `EnchantedScreen.java` заменён минимальной совместимой заглушкой, наследующей `LT6Screen`: ошибки `SkyLib.scan()` больше нет. Настоящий GUI — `LT6Screen.java`, вызывается через `LT6Keys.java` (правый Shift).
+- Старый `EnchantedScreen.java` заменён минимальной совместимой заглушкой, наследующей `LT6Screen`: ошибки `SkyLib.scan()` больше нет. Настоящий GUI — `LT6Screen.java`, вызывается через `LT6Keys.java` (левый Shift).
 - Старый неиспользуемый `EnchantedClient.java` заменён заглушкой. Точка входа `fabric.mod.json`: `LT6Client`.
 - `SkyLib` теперь использует только 6 присланных наборов неба. В ZIP 36 PNG-граней (по 6 на панораму). В workflow дополнительно удаляются лишние старые PNG на сервере сборки, если они остались в репозитории.
 - `.github/workflows/build.yml` ищет `lt6-*.jar`, пропуская `sources/dev/javadoc` и копирует в `Enchanted/client_mod/lt6.jar`.

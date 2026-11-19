@@ -46,9 +46,9 @@ public sealed class GameService
     }
 
     /// <summary>
-    /// Пять секунд тишины после начала сетевой работы — отмена и быстрый повтор.
-    /// До первого запроса допускаем 8 секунд на локальную подготовку файлов,
-    /// чтобы не обрывать проверку файлов без сетевого трафика.
+    /// Не отменяем всю установку при краткой паузе сети или локальной проверке.
+    /// Переключение зеркал выполняет MirrorHandler; установка повторяется лишь
+    /// при действительно длительном зависании или сетевой ошибке.
     /// </summary>
     async Task Guard(Func<CancellationToken, Task> work, Action<string> status, CancellationToken ct)
     {
@@ -69,7 +69,7 @@ public sealed class GameService
                     {
                         await Task.Delay(200, cts.Token).ConfigureAwait(false);
                         long quietMs = Environment.TickCount64 - Interlocked.Read(ref lastTick);
-                        if (quietMs < (started ? 5000 : 8000)) continue;
+                        if (quietMs < (started ? 60000 : 90000)) continue;
                         Interlocked.Exchange(ref stalled, 1);
                         cts.Cancel();
                         return;
@@ -98,7 +98,7 @@ public sealed class GameService
             bool wasStalled = Interlocked.CompareExchange(ref stalled, 0, 0) == 1;
             Log.W($"загрузка: повтор {failures}/8, таймаут={wasStalled}: {problem?.GetBaseException().Message}");
             status(wasStalled
-                ? $"Нет ответа 5 с — переключаю источник и повторяю ({failures}/8)..."
+                ? $"Загрузка долго не отвечает — повторяю ({failures}/8)..."
                 : $"Ошибка загрузки — быстро повторяю ({failures}/8)...");
             await Task.Delay(wasStalled ? 250 : 500, ct);
         }
@@ -140,7 +140,7 @@ public sealed class GameService
                 {
                     using var fabricHttp = new HttpClient(new MirrorHandler { PreferMirror = cfg.Mirrors })
                     {
-                        Timeout = TimeSpan.FromSeconds(12)
+                        Timeout = TimeSpan.FromSeconds(75)
                     };
                     fabricHttp.DefaultRequestHeaders.UserAgent.ParseAdd(Const.UserAgent);
                     vn = await new FabricInstaller(fabricHttp).Install(mc, path);

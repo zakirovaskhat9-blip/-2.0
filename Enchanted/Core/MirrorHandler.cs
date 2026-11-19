@@ -92,7 +92,14 @@ public sealed class MirrorHandler : DelegatingHandler
             {
                 OnRequestAttempt?.Invoke();
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromSeconds(3)); // ожидание заголовков, не всей загрузки
+                // Version manifests may take longer than an asset request; cancelling
+                // them after 3 s made Minecraft fail before any installation started.
+                // Keep a fast first attempt, then give alternative hosts time to answer.
+                bool metadata = orig.AbsolutePath.Contains("version_manifest", StringComparison.OrdinalIgnoreCase);
+                int headerSeconds = metadata
+                    ? (i == 0 ? 10 : i == 1 ? 15 : 18)
+                    : (i == 0 ? 4 : i == 1 ? 8 : 12);
+                cts.CancelAfter(TimeSpan.FromSeconds(headerSeconds)); // headers only
                 using var msg = Clone(req, u);
                 var res = mode == 1
                     ? await Tls12.SendAsync(msg, cts.Token).ConfigureAwait(false)
