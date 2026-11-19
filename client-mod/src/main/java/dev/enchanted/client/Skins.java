@@ -141,7 +141,7 @@ public final class Skins {
 
     private static boolean isMe(String name) {
         Minecraft mc = Minecraft.getInstance();
-        return (mc.player != null && name.equalsIgnoreCase(mc.player.getGameProfile().getName()))
+        return (mc.player != null && name.equalsIgnoreCase(mc.player.getGameProfile().name()))
                 || (!accountNick.isBlank() && name.equalsIgnoreCase(accountNick));
     }
 
