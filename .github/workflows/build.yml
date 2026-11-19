@@ -44,7 +44,10 @@ jobs:
       - name: Собрать лаунчер
         run: dotnet publish Enchanted/Enchanted.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
 
-      - uses: actions/upload-artifact@v4
+     
+      - name: Загрузить LT6MS Launcher
+        uses: actions/upload-artifact@v4
         with:
-          name: Enchanted
-          path: publish/Enchanted.exe
+          name: LT6MS-Launcher
+          path: 'publish/LT6MS Launcher.exe'
+          if-no-files-found: error
