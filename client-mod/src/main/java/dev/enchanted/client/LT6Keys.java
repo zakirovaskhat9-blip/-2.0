@@ -8,7 +8,7 @@ public final class LT6Keys {
     public static void poll(Minecraft mc) {
         long win=GLFW.glfwGetCurrentContext();
         if(win==0) return;
-        boolean down=GLFW.glfwGetKey(win,GLFW.GLFW_KEY_RIGHT_SHIFT)==GLFW.GLFW_PRESS;
+        boolean down=GLFW.glfwGetKey(win,GLFW.GLFW_KEY_LEFT_SHIFT)==GLFW.GLFW_PRESS;
         if(down && !last && mc.screen==null) mc.setScreen(new LT6Screen());
         last=down;
     }
