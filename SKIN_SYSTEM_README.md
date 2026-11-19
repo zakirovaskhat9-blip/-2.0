@@ -1,4 +1,4 @@
-# Enchanted skin system (Minecraft Java 1.21.11, Fabric)
+# LT6MS launcher skin system (Minecraft Java 1.21.11, Fabric)
 
 ## In game
 - `/eskin Dream` — use Dream's public skin on **your own player, locally**.

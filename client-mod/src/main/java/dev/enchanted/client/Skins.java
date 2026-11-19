@@ -7,7 +7,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.core.ClientAsset;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.PlayerModelType;
 import net.minecraft.world.entity.player.PlayerSkin;
 
@@ -44,7 +44,7 @@ public final class Skins {
     private static final Path DISK = FabricLoader.getInstance().getConfigDir().resolve("enchanted-skin-cache");
 
     private static final class Entry {
-        volatile ResourceLocation texture;
+        volatile Identifier texture;
         volatile boolean slim;
         volatile long checked;
         volatile boolean found;
@@ -128,7 +128,7 @@ public final class Skins {
                 } finally { BUSY.remove(key); }
             });
         }
-        ResourceLocation texture = entry.texture;
+        Identifier texture = entry.texture;
         if (!entry.found || texture == null) return original;
         if (entry.original == original) return entry.replacement;
         // Explicit resource texture is necessary in 1.21.11 (the normal skin is a downloaded asset).
@@ -188,7 +188,7 @@ public final class Skins {
             if (img.getWidth() != 64 || img.getHeight() != 64) { img.close(); return; }
             DynamicTexture texture = new DynamicTexture(() -> "Enchanted player skin", img);
             texture.upload();
-            ResourceLocation id = ResourceLocation.fromNamespaceAndPath("enchanted_client", "skins/skin_" + System.nanoTime());
+            Identifier id = Identifier.fromNamespaceAndPath("enchanted_client", "skins/skin_" + System.nanoTime());
             Minecraft.getInstance().getTextureManager().register(id, texture);
             entry.texture = id;
             entry.slim = skin.slim();

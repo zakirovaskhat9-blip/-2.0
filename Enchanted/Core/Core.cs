@@ -7,7 +7,7 @@ public static class Const
 {
     public const string Repo = "zakirovaskhat9-blip/-2.0";
     public static readonly string[] Versions = { "1.21.11", "1.21.4" };
-    public const string UserAgent = "Enchanted/2.0 (+https://github.com/zakirovaskhat9-blip/-2.0)";
+    public const string UserAgent = "LT6MSLauncher/2.0 (+https://github.com/zakirovaskhat9-blip/-2.0)";
 
     /// <summary>Only essential performance mods and Fabric API. Custom skin mod is installed separately.</summary>
     public static string[] Mods(string mc) => new[]

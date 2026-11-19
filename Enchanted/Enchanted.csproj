@@ -5,8 +5,11 @@
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>Enchanted</AssemblyName>
+    <AssemblyName>LT6MS Launcher</AssemblyName>
     <RootNamespace>Enchanted</RootNamespace>
+    <Product>LT6MS лаунчер</Product>
+    <Title>LT6MS лаунчер</Title>
+    <Description>LT6MS Minecraft Launcher</Description>
     <Version>2.0.0</Version>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
