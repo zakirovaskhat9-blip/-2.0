@@ -36,7 +36,7 @@ public partial class MainWindow : Window
         if (cfg.SkinServer.Trim() == "" || !SkinStore.Has) return;
         StatusText.Text = "Загружаю скин на сервер...";
         var err = await SkinStore.UploadAsync(cfg, nick);
-        StatusText.Text = err ?? "Скин загружен: его увидят другие игроки с Enchanted";
+        StatusText.Text = err ?? "Скин загружен: его увидят другие игроки с LT6";
     }
 
     async void PickSkin_Click(object s, RoutedEventArgs e)

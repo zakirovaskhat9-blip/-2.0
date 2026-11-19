@@ -50,7 +50,7 @@ public sealed class GameService
             using (var archive = System.IO.Compression.ZipFile.OpenRead(temp))
             {
                 if (archive.GetEntry("fabric.mod.json") == null ||
-                    archive.GetEntry("dev/enchanted/client/LT6Client.class") == null)
+                    archive.GetEntry("dev/lt6/client/LT6Client.class") == null)
                     throw new InvalidDataException("Неверный lt6.jar: нет fabric.mod.json или LT6Client.class");
             }
             // Не переписываем существующий корректный JAR на каждом запуске.

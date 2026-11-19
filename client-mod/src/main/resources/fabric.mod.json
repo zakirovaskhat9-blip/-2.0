@@ -3,7 +3,7 @@
   "id": "lt6",
   "version": "1.0.0",
   "name": "LT6",
-  "description": "LT6 visuals: FPS, Target ESP, Custom Sky, Jump Circles, color controls and skins. Open the in-game GUI with Right Shift.",
+  "description": "LT6 visual mod for Minecraft 1.21.11: configurable GUI on Right Shift, HUD, Target ESP, Custom Sky and skins.",
   "authors": [
     "LT6MS"
   ],
@@ -11,11 +11,11 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "dev.enchanted.client.LT6Client"
+      "dev.lt6.client.LT6Client"
     ]
   },
   "mixins": [
-    "enchanted-client.mixins.json"
+    "lt6.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.16.0",

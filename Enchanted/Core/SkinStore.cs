@@ -139,14 +139,14 @@ public static class SkinStore
         }
     }
 
-    /// <summary>Настройки для мода: config/enchanted-skins.json в папке игры.</summary>
+    /// <summary>Настройки для мода: config/lt6-skins.json в папке игры.</summary>
     public static void WriteModConfig(string mc, Config cfg, string nick)
     {
         try
         {
             var dir = Path.Combine(Dirs.Game(mc), "config");
             Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, "enchanted-skins.json");
+            var path = Path.Combine(dir, "lt6-skins.json");
             // Preserve /eskin selection written from inside Minecraft.
             string selectedNick = "";
             if (File.Exists(path))

@@ -25,9 +25,24 @@
   <ItemGroup>
     <EmbeddedResource Include="client_mod/lt6.jar" LogicalName="lt6.jar" />
   </ItemGroup>
-  <Target Name="EnsureLT6Jar" BeforeTargets="PrepareForBuild" Condition="!Exists('client_mod/lt6.jar')">
-    <Error Text="LT6 JAR missing. Build client-mod and copy lt6-*.jar into Enchanted/client_mod/lt6.jar before dotnet publish." />
-  </Target>
+<!-- The mod must be embedded in the single-file EXE. Take the fresh Gradle output
+     automatically, even if an older GitHub workflow forgets to copy lt6.jar. -->
+<Target Name="PrepareLT6Jar" BeforeTargets="PrepareForBuild">
+  <ItemGroup>
+    <_LT6BuiltJar Include="$(MSBuildProjectDirectory)/../client-mod/build/libs/lt6-*.jar"
+                  Exclude="$(MSBuildProjectDirectory)/../client-mod/build/libs/*-sources.jar;$(MSBuildProjectDirectory)/../client-mod/build/libs/*-dev.jar;$(MSBuildProjectDirectory)/../client-mod/build/libs/*-javadoc.jar" />
+  </ItemGroup>
+  <Error Condition="'@(_LT6BuiltJar->Count())' != '0' And '@(_LT6BuiltJar->Count())' != '1'"
+         Text="LT6: multiple release JARs found in client-mod/build/libs. Run gradle clean build first." />
+  <MakeDir Directories="$(MSBuildProjectDirectory)/client_mod" />
+  <Copy Condition="'@(_LT6BuiltJar)' != ''"
+        SourceFiles="@(_LT6BuiltJar)"
+        DestinationFiles="@(_LT6BuiltJar->'$(MSBuildProjectDirectory)/client_mod/lt6.jar')"
+        SkipUnchangedFiles="true" />
+  <Error Condition="!Exists('$(MSBuildProjectDirectory)/client_mod/lt6.jar')"
+         Text="LT6 JAR missing: run gradle build in client-mod first (expected client-mod/build/libs/lt6-*.jar)." />
+  <Message Importance="high" Text="LT6 resource ready: $(MSBuildProjectDirectory)/client_mod/lt6.jar" />
+</Target>
   <ItemGroup>
     <Using Include="System" />
     <Using Include="System.IO" />

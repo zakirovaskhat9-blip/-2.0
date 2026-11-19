@@ -1,0 +1,44 @@
+package dev.lt6.client.mixin;
+
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import dev.lt6.client.Cfg;
+import dev.lt6.client.SkyLib;
+import net.minecraft.world.attribute.EnvironmentAttribute;
+import net.minecraft.world.attribute.EnvironmentAttributeProbe;
+import net.minecraft.world.attribute.EnvironmentAttributes;
+
+/** Custom Sky: подменяем цвет неба, тумана, облаков и яркость звёзд. */
+@Mixin(EnvironmentAttributeProbe.class)
+public abstract class ProbeMixin {
+	@SuppressWarnings("unchecked")
+	@Inject(method = "getValue", at = @At("RETURN"), cancellable = true)
+	private <V> void lt6$sky(EnvironmentAttribute<V> attr, float partialTick, CallbackInfoReturnable<V> cir) {
+		if (!Cfg.SKY.enabled) return;
+		// getValue вызывается очень часто для любых атрибутов - чужие отсекаем сразу
+		if (attr != EnvironmentAttributes.SKY_COLOR && attr != EnvironmentAttributes.FOG_COLOR
+				&& attr != EnvironmentAttributes.CLOUD_COLOR && attr != EnvironmentAttributes.STAR_BRIGHTNESS) return;
+		Object orig = cir.getReturnValue();
+		Object res = null;
+		SkyLib.Def d = SkyLib.current(Cfg.SKY_PRESET.idx);
+		if (d == null) return;
+		if (attr == EnvironmentAttributes.SKY_COLOR) {
+			res = paint(orig, d.sky());
+		} else if (attr == EnvironmentAttributes.FOG_COLOR) {
+			res = paint(orig, d.fog());
+		} else if (attr == EnvironmentAttributes.CLOUD_COLOR) {
+			res = Integer.valueOf(0); // полностью прозрачные облака = облаков нет
+		} else if (attr == EnvironmentAttributes.STAR_BRIGHTNESS) {
+			res = Float.valueOf(0.0f);
+		}
+		if (res != null) cir.setReturnValue((V) res);
+	}
+
+	private static Object paint(Object orig, int rgb) {
+		int alpha = orig instanceof Integer i && (i >>> 24) != 0 ? (i & 0xFF000000) : 0xFF000000;
+		return Integer.valueOf(alpha | (rgb & 0xFFFFFF));
+	}
+}
