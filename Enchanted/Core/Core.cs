@@ -9,11 +9,15 @@ public static class Const
     public static readonly string[] Versions = { "1.21.11", "1.21.4" };
     public const string UserAgent = "LT6MSLauncher/2.0 (+https://github.com/zakirovaskhat9-blip/-2.0)";
 
-    /// <summary>Only essential performance mods and Fabric API. Custom skin mod is installed separately.</summary>
+    /// <summary>
+    /// Seven performance/dependency mods + Fabric Mod Menu for the in-game Mods button.
+    /// LT6 is embedded separately by GameService for Minecraft 1.21.11.
+    /// ModManager resolves the right Mod Menu version for each Minecraft version.
+    /// </summary>
     public static string[] Mods(string mc) => new[]
     {
         "fabric-api", "sodium", "lithium", "ferrite-core",
-        "immediatelyfast", "entityculling", "modernfix"
+        "immediatelyfast", "entityculling", "modernfix", "modmenu"
     };
 
 }

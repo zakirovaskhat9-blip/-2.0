@@ -3,7 +3,7 @@
   "id": "lt6",
   "version": "1.0.0",
   "name": "LT6",
-  "description": "LT6 visual modules, in-game GUI, HUD, custom sky and skin support for Fabric 1.21.11",
+  "description": "LT6 visuals: FPS, Target ESP, Custom Sky, Jump Circles, color controls and skins. Open the in-game GUI with Left Shift.",
   "authors": [
     "LT6MS"
   ],
@@ -22,5 +22,9 @@
     "minecraft": "~1.21.11",
     "java": ">=21",
     "fabric-api": "*"
+  },
+  "icon": "assets/lt6/icon.png",
+  "contact": {
+    "homepage": "https://github.com/zakirovaskhat9-blip/-2.0"
   }
 }

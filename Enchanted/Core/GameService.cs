@@ -22,7 +22,7 @@ public sealed class GameService
         Mirror.OnRequestAttempt = Touch;
     }
 
-    /// <summary>LT6 визуальный мод (правый Shift) кладём только на 1.21.11, на остальных версиях убираем.</summary>
+    /// <summary>LT6 визуальный мод (левый Shift) кладём только на 1.21.11, на остальных версиях убираем.</summary>
     void InstallClientMod(string mc)
     {
         var dir = Dirs.Mods(mc);
