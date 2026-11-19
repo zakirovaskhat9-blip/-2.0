@@ -23,6 +23,7 @@
     <Resource Include="enchanted.ico" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="sky_packs/*.zip" />
     <EmbeddedResource Include="client_mod/lt6.jar" LogicalName="lt6.jar" />
   </ItemGroup>
 <!-- The mod must be embedded in the single-file EXE. Take the fresh Gradle output

@@ -14,11 +14,11 @@ public static class Const
     /// LT6 is embedded separately by GameService for Minecraft 1.21.11.
     /// ModManager resolves the right Mod Menu version for each Minecraft version.
     /// </summary>
-    public static string[] Mods(string mc) => new[]
-    {
-        "fabric-api", "sodium", "lithium", "ferrite-core",
-        "immediatelyfast", "entityculling", "modernfix", "modmenu"
-    };
+    public static string[] Mods(string mc) => mc == "1.21.11"
+        ? new[] { "fabric-api", "sodium", "lithium", "ferrite-core",
+                  "immediatelyfast", "entityculling", "modernfix", "modmenu", "skyboxify" }
+        : new[] { "fabric-api", "sodium", "lithium", "ferrite-core",
+                  "immediatelyfast", "entityculling", "modernfix", "modmenu" };
 
 }
 
