@@ -28,7 +28,7 @@ public sealed class MirrorHandler : DelegatingHandler
     public bool PreferMirror { get; set; } = true;
 
     // Обновляет таймер активности во время переключения адресов.
-    public Action? OnRequestAttempt { get; set; };
+    public Action? OnRequestAttempt { get; set; }
 
 
     // запасной канал: только TLS 1.2, HTTP/1.1 (другой отпечаток рукопожатия, как у Python/OpenSSL)
