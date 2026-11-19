@@ -1,49 +1,31 @@
 package dev.enchanted.client;
 
-import org.lwjgl.glfw.GLFW;
-
-import com.mojang.blaze3d.platform.InputConstants;
-
+import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
-import net.minecraft.client.KeyMapping;
-import net.minecraft.client.Minecraft;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.InteractionResult;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.minecraft.network.chat.Component;
 
-public class EnchantedClient implements ClientModInitializer {
-	private static KeyMapping menuKey;
-
-	@Override
-	public void onInitializeClient() {
-		Cfg.load();
-		Skins.init(); // скины игроков (настройки пишет лаунчер)
-
-		// Правый Shift открывает меню (клавишу можно сменить в управлении)
-		menuKey = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.enchanted.menu", InputConstants.Type.KEYSYM,
-				GLFW.GLFW_KEY_RIGHT_SHIFT, KeyMapping.Category.MISC));
-		ClientTickEvents.END_CLIENT_TICK.register(EnchantedClient::tick);
-
-		// цель Target ESP - тот, кого ударили
-		AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
-			if (world.isClientSide()) Hud.hit(entity);
-			return InteractionResult.PASS;
-		});
-
-		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
-				Identifier.fromNamespaceAndPath("enchanted", "target_esp"), Hud::render);
-		HudElementRegistry.attachElementAfter(Identifier.fromNamespaceAndPath("enchanted", "target_esp"),
-				Identifier.fromNamespaceAndPath("enchanted", "overlay"), Overlay::render);
-	}
-
-	private static void tick(Minecraft mc) {
-		Binds.poll(mc);
-		while (menuKey.consumeClick()) {
-			if (mc.player != null && mc.screen == null) mc.setScreen(new EnchantedScreen());
-		}
-	}
+/** Skin-only client. No ESP, HUD, ClickGUI, animations or visual cheats. */
+public final class EnchantedClient implements ClientModInitializer {
+    @Override
+    public void onInitializeClient() {
+        Skins.init();
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> dispatcher.register(
+            ClientCommandManager.literal("eskin")
+                .executes(cmd -> { cmd.getSource().sendFeedback(Component.literal("Скин: " + Skins.current() + ". /eskin <ник> или /eskin reset")); return 1; })
+                .then(ClientCommandManager.argument("nick", StringArgumentType.word())
+                    .executes(cmd -> {
+                        String nick = StringArgumentType.getString(cmd, "nick");
+                        if (nick.equalsIgnoreCase("reset")) {
+                            Skins.reset();
+                            cmd.getSource().sendFeedback(Component.literal("Скин сброшен."));
+                        } else if (Skins.select(nick)) {
+                            cmd.getSource().sendFeedback(Component.literal("Скин " + nick + " выбран. Загрузка начнётся автоматически."));
+                        } else {
+                            cmd.getSource().sendFeedback(Component.literal("Ник должен содержать 3–16 символов: A-Z, 0-9, _."));
+                        }
+                        return 1;
+                    }))));
+    }
 }

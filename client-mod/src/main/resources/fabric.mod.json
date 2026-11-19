@@ -1,20 +1,26 @@
 {
-	"schemaVersion": 1,
-	"id": "enchanted_client",
-	"version": "2.2.0",
-	"name": "Enchanted Client",
-	"description": "Встроенное меню Enchanted (правый Shift): Target ESP, Custom Sky, FPS, Enemy HP, Armor Status, скины игроков.",
-	"authors": ["Enchanted"],
-	"license": "CC0-1.0",
-	"environment": "client",
-	"entrypoints": {
-		"client": ["dev.enchanted.client.EnchantedClient"]
-	},
-	"mixins": ["enchanted-client.mixins.json"],
-	"depends": {
-		"fabricloader": ">=0.16.0",
-		"minecraft": "~1.21.11",
-		"java": ">=21",
-		"fabric-api": "*"
-	}
+  "schemaVersion": 1,
+  "id": "enchanted_client",
+  "version": "2.2.0",
+  "name": "Enchanted Client",
+  "description": "Minimal Enchanted client integration for player skins. No ESP, HUD, GUI, animations or custom skies.",
+  "authors": [
+    "Enchanted"
+  ],
+  "license": "CC0-1.0",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.enchanted.client.EnchantedClient"
+    ]
+  },
+  "mixins": [
+    "enchanted-client.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
 }

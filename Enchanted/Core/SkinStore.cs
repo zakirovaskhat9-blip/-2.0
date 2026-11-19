@@ -146,8 +146,21 @@ public static class SkinStore
         {
             var dir = Path.Combine(Dirs.Game(mc), "config");
             Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(new { server = cfg.SkinServer.Trim(), nick, file = Has ? SkinPath : "", slim = cfg.SkinSlim });
-            File.WriteAllText(Path.Combine(dir, "enchanted-skins.json"), json);
+            var path = Path.Combine(dir, "enchanted-skins.json");
+            // Preserve /eskin selection written from inside Minecraft.
+            string selectedNick = "";
+            if (File.Exists(path))
+            {
+                try
+                {
+                    using var previous = JsonDocument.Parse(File.ReadAllText(path));
+                    if (previous.RootElement.TryGetProperty("selectedNick", out var chosen))
+                        selectedNick = chosen.GetString() ?? "";
+                }
+                catch (Exception e) { Log.W("старый конфиг скинов: " + e.Message); }
+            }
+            var json = JsonSerializer.Serialize(new { server = cfg.SkinServer.Trim(), nick, file = Has ? SkinPath : "", slim = cfg.SkinSlim, selectedNick });
+            File.WriteAllText(path, json);
         }
         catch (Exception e) { Log.W("скин: конфиг мода: " + e.Message); }
     }

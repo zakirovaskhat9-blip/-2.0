@@ -16,7 +16,7 @@ public abstract class SkinMixin {
 	private void enchanted$skin(CallbackInfoReturnable<PlayerSkin> cir) {
 		if (!Skins.active) return;
 		PlayerSkin orig = cir.getReturnValue();
-		PlayerSkin res = Skins.override(Skins.nameOf(((PlayerInfo) (Object) this).getProfile()), orig);
+		PlayerSkin res = Skins.override(((PlayerInfo) (Object) this).getProfile().getName(), orig);
 		if (res != orig) cir.setReturnValue(res);
 	}
 }

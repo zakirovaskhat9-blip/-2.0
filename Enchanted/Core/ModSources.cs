@@ -170,6 +170,26 @@ public sealed class ModManager
         try { if (File.Exists(manPath)) man = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(manPath)) ?? new(); } catch { }
         void SaveMan() { try { File.WriteAllText(manPath, JsonSerializer.Serialize(man)); } catch { } }
 
+        // Clean up mods that this launcher previously installed but are no longer selected.
+        // Never remove jars that are not recorded in the launcher manifest.
+        var selected = new HashSet<string>(Const.Mods(mc), StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, filename) in man.ToArray())
+        {
+            if (key.StartsWith("dep:") || selected.Contains(key)) continue;
+            try { File.Delete(Path.Combine(dir, Path.GetFileName(filename))); } catch { }
+            man.Remove(key);
+        }
+        // Dependencies are resolved afresh. Remove tracked legacy dependencies first.
+        foreach (var (key, filename) in man.ToArray())
+        {
+            if (!key.StartsWith("dep:")) continue;
+            try { File.Delete(Path.Combine(dir, Path.GetFileName(filename))); } catch { }
+            man.Remove(key);
+        }
+        SaveMan();
+        const int MaxMods = 12;
+        int CountJars() => Directory.GetFiles(dir, "*.jar").Length;
+
         // 1. свои jar-ы рядом с exe: mods_bundle/<версия>/ или mods_bundle/
         var bundleNames = new List<string>();
         foreach (var b in new[] { Path.Combine(AppContext.BaseDirectory, "mods_bundle", mc), Path.Combine(AppContext.BaseDirectory, "mods_bundle") })
@@ -178,7 +198,11 @@ public sealed class ModManager
             foreach (var j in Directory.GetFiles(b, "*.jar"))
             {
                 var dst = Path.Combine(dir, Path.GetFileName(j));
-                if (!File.Exists(dst)) File.Copy(j, dst);
+                if (!File.Exists(dst))
+                {
+                    if (CountJars() >= MaxMods) throw new InvalidOperationException("Лимит 12 модов: проверьте mods_bundle и папку mods.");
+                    File.Copy(j, dst);
+                }
                 bundleNames.Add(Path.GetFileName(j).ToLowerInvariant().Replace("-", "").Replace("_", ""));
             }
         }
@@ -214,7 +238,11 @@ public sealed class ModManager
         async Task<bool> Install(string key, ModFile f, string via)
         {
             var path = Path.Combine(dir, f.Name);
-            if (!File.Exists(path)) await Download(f, path, ct);
+            if (!File.Exists(path))
+            {
+                if (CountJars() >= MaxMods) throw new InvalidOperationException("Лимит 12 модов: удалите лишние пользовательские моды или пересмотрите зависимости.");
+                await Download(f, path, ct);
+            }
             if (man.TryGetValue(key, out var old) && old != f.Name) { try { File.Delete(Path.Combine(dir, old)); } catch { } }
             man[key] = f.Name;
             SaveMan();

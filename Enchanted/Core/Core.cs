@@ -9,18 +9,13 @@ public static class Const
     public static readonly string[] Versions = { "1.21.11", "1.21.4" };
     public const string UserAgent = "Enchanted/2.0 (+https://github.com/zakirovaskhat9-blip/-2.0)";
 
-    /// <summary>Slug-и модов Modrinth. GGTU есть только на 1.21.11.</summary>
-    public static string[] Mods(string mc)
+    /// <summary>Only essential performance mods and Fabric API. Custom skin mod is installed separately.</summary>
+    public static string[] Mods(string mc) => new[]
     {
-        var l = new List<string>
-        {
-            "fabric-api", "sodium", "lithium", "ferrite-core", "modernfix", "immediatelyfast", "memoryleakfix",
-            "modmenu", "ebe", "cull-leaves", "moreculling", "entityculling", "immersive-optimization",
-            "too-many-entities", "entityopt", "c2me-fabric", "async", "iris"
-        };
-        if (mc == "1.21.11") l.Add("ggtu");
-        return l.ToArray();
-    }
+        "fabric-api", "sodium", "lithium", "ferrite-core",
+        "immediatelyfast", "entityculling", "modernfix"
+    };
+
 }
 
 public static class Dirs

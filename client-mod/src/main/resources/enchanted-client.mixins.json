@@ -1,10 +1,12 @@
 {
-	"required": true,
-	"minVersion": "0.8",
-	"package": "dev.enchanted.client.mixin",
-	"compatibilityLevel": "JAVA_21",
-	"client": ["ProbeMixin", "SkyBodiesMixin", "SkinMixin"],
-	"injectors": {
-		"defaultRequire": 0
-	}
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.enchanted.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "SkinMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
 }

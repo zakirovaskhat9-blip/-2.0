@@ -1,15 +1,21 @@
 package dev.enchanted.client;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.mojang.blaze3d.platform.NativeImage;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.core.ClientAsset;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.PlayerModelType;
+import net.minecraft.world.entity.player.PlayerSkin;
+
 import java.io.ByteArrayInputStream;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
-import java.lang.reflect.RecordComponent;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -19,265 +25,179 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.mojang.blaze3d.platform.NativeImage;
-
-import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.player.PlayerSkin;
-
-/**
- * Скины игроков как в Lunar: лаунчер Enchanted кладёт свой скин на сервер скинов, мод подтягивает скины всех игроков
- * по нику и подменяет их при отрисовке. Свой скин берётся из локального файла (работает и без сервера).
- * Настройки пишет лаунчер в config/enchanted-skins.json: {"server":"http://...","nick":"Ник","file":"путь.png","slim":false}.
- * Всё сетевое - в фоновых потоках, в рендере только чтение из кэша (без аллокаций, пока скин не менялся).
- */
+/** Client-side skin fallback and nickname skin changer. Never sends changes to servers. */
 public final class Skins {
-	private static final long TTL_OK = 300_000L, TTL_NONE = 60_000L;
+    private static final Pattern NICK = Pattern.compile("[A-Za-z0-9_]{3,16}");
+    private static final long OK_TTL = 300_000L, MISS_TTL = 45_000L;
+    private static final Map<String, Entry> CACHE = new ConcurrentHashMap<>();
+    private static final Set<String> BUSY = ConcurrentHashMap.newKeySet();
+    private static final ExecutorService IO = Executors.newFixedThreadPool(2, r -> {
+        Thread thread = new Thread(r, "enchanted-skin-io");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private static final HttpClient HTTP = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(Duration.ofSeconds(5)).build();
+    private static final Path CONFIG = FabricLoader.getInstance().getConfigDir().resolve("enchanted-skins.json");
+    private static final Path DISK = FabricLoader.getInstance().getConfigDir().resolve("enchanted-skin-cache");
 
-	private static final class Entry {
-		volatile Identifier tex;
-		volatile boolean slim, found;
-		volatile long t;
-		volatile String etag;
-		PlayerSkin lastOrig, lastRes; // только рендер-поток
-	}
+    private static final class Entry {
+        volatile ResourceLocation texture;
+        volatile boolean slim;
+        volatile long checked;
+        volatile boolean found;
+        PlayerSkin original, replacement; // Client/render thread only.
+    }
+    private record Download(byte[] bytes, boolean slim) { }
 
-	private static final Map<String, Entry> CACHE = new ConcurrentHashMap<>();
-	private static final Set<String> BUSY = ConcurrentHashMap.newKeySet();
-	private static ExecutorService pool;
-	private static HttpClient http;
-	private static String server = "", me = "";
-	private static Path file;
-	private static boolean localSlim, broken;
-	private static int seq;
-	private static Method nameM;
+    private static String server = "", accountNick = "", selectedNick = "";
+    private static Path localFile;
+    private static boolean localSlim;
+    public static volatile boolean active = true;
+    private Skins() { }
 
-	/** Включён ли модуль (есть сервер или локальный скин). */
-	public static volatile boolean active;
+    public static void init() {
+        try {
+            if (Files.isRegularFile(CONFIG)) {
+                JsonObject o = JsonParser.parseString(Files.readString(CONFIG)).getAsJsonObject();
+                server = string(o, "server").replaceAll("/+$", "");
+                // Only use HTTPS for public URLs; HTTP allowed for local development servers.
+                if (!(server.startsWith("https://") || server.startsWith("http://localhost:") || server.startsWith("http://127.0.0.1:"))) server = "";
+                accountNick = string(o, "nick");
+                selectedNick = string(o, "selectedNick");
+                if (!NICK.matcher(selectedNick).matches()) selectedNick = "";
+                localSlim = o.has("slim") && o.get("slim").getAsBoolean();
+                if (!string(o, "file").isBlank()) localFile = Path.of(string(o, "file"));
+            }
+            Files.createDirectories(DISK);
+        } catch (Exception exception) {
+            System.err.println("[Enchanted Skins] Config error: " + exception);
+        }
+    }
 
-	private Skins() {
-	}
+    private static String string(JsonObject o, String key) {
+        return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString().trim() : "";
+    }
 
-	public static void init() {
-		try {
-			Path f = FabricLoader.getInstance().getConfigDir().resolve("enchanted-skins.json");
-			if (!Files.exists(f)) return;
-			JsonObject o = JsonParser.parseString(Files.readString(f)).getAsJsonObject();
-			String s = o.has("server") ? o.get("server").getAsString().trim() : "";
-			while (s.endsWith("/")) s = s.substring(0, s.length() - 1);
-			server = s.startsWith("http://") || s.startsWith("https://") ? s : "";
-			me = o.has("nick") ? o.get("nick").getAsString().trim() : "";
-			localSlim = o.has("slim") && o.get("slim").getAsBoolean();
-			if (o.has("file") && !o.get("file").getAsString().isBlank()) file = Path.of(o.get("file").getAsString());
-			if (server.isEmpty() && file == null) return;
-			http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
-			pool = Executors.newFixedThreadPool(2, r -> {
-				Thread th = new Thread(r, "enchanted-skins");
-				th.setDaemon(true);
-				return th;
-			});
-			active = true;
-		} catch (Throwable t) {
-			active = false;
-		}
-	}
+    /** In-game /eskin <nick>, saved across launches. */
+    public static boolean select(String nick) {
+        if (!NICK.matcher(nick).matches()) return false;
+        selectedNick = nick;
+        CACHE.remove(accountNick.toLowerCase(Locale.ROOT));
+        try {
+            JsonObject o = Files.exists(CONFIG) ? JsonParser.parseString(Files.readString(CONFIG)).getAsJsonObject() : new JsonObject();
+            o.addProperty("selectedNick", selectedNick);
+            Files.createDirectories(CONFIG.getParent());
+            Files.writeString(CONFIG, o.toString());
+        } catch (Exception ex) { System.err.println("[Enchanted Skins] Save failed: " + ex); }
+        return true;
+    }
 
-	/** Ник из GameProfile (authlib не переименовывается, поэтому достаём рефлексией: работает и со старым getName, и с record name). */
-	public static String nameOf(Object profile) {
-		if (profile == null) return null;
-		try {
-			if (nameM == null) {
-				for (String n : new String[] {"name", "getName"}) {
-					try {
-						nameM = profile.getClass().getMethod(n);
-						break;
-					} catch (NoSuchMethodException ignored) {
-					}
-				}
-				if (nameM == null) return null;
-			}
-			return (String) nameM.invoke(profile);
-		} catch (Throwable t) {
-			return null;
-		}
-	}
+    public static void reset() {
+        selectedNick = "";
+        CACHE.clear();
+        try {
+            if (Files.exists(CONFIG)) {
+                JsonObject o = JsonParser.parseString(Files.readString(CONFIG)).getAsJsonObject();
+                o.remove("selectedNick");
+                Files.writeString(CONFIG, o.toString());
+            }
+        } catch (Exception ex) { System.err.println("[Enchanted Skins] Reset failed: " + ex); }
+    }
 
-	/** Вызывается из PlayerInfo.getSkin() на каждый кадр для каждого игрока: быстрый путь - одно чтение из map. */
-	public static PlayerSkin override(String name, PlayerSkin orig) {
-		if (!active || broken || name == null || orig == null) return orig;
-		String key = name.toLowerCase(Locale.ROOT);
-		Entry e = CACHE.computeIfAbsent(key, k -> new Entry());
-		long now = System.currentTimeMillis();
-		if (now - e.t > (e.found ? TTL_OK : TTL_NONE) && BUSY.add(key)) {
-			final Entry fe = e;
-			pool.execute(() -> {
-				try {
-					fetch(key, name, fe);
-				} catch (Throwable t) {
-					fe.t = System.currentTimeMillis() - TTL_NONE + 20_000L; // ошибка сети: повтор через ~20 с
-				} finally {
-					BUSY.remove(key);
-				}
-			});
-		}
-		Identifier tex = e.tex;
-		if (!e.found || tex == null) return orig;
-		if (e.lastOrig == orig) return e.lastRes;
-		try {
-			PlayerSkin r = build(orig, tex, e.slim);
-			e.lastOrig = orig;
-			e.lastRes = r;
-			return r;
-		} catch (Throwable t) {
-			broken = true; // структура PlayerSkin другая - молча отключаемся
-			return orig;
-		}
-	}
+    public static String current() { return selectedNick.isBlank() ? "по умолчанию" : selectedNick; }
 
-	// ---------------- загрузка (фоновый поток) ----------------
+    public static PlayerSkin override(String name, PlayerSkin original) {
+        if (!active || original == null || name == null) return original;
+        String requested = name;
+        // Only override own skin when /eskin was set; never replace other players' skins.
+        if (!selectedNick.isBlank() && isMe(name)) requested = selectedNick;
+        if (!NICK.matcher(requested).matches()) return original;
+        String key = requested.toLowerCase(Locale.ROOT);
+        Entry entry = CACHE.computeIfAbsent(key, ignored -> new Entry());
+        if (System.currentTimeMillis() - entry.checked > (entry.found ? OK_TTL : MISS_TTL) && BUSY.add(key)) {
+            entry.checked = System.currentTimeMillis();
+            String lookupName = requested;
+            IO.execute(() -> {
+                try { fetch(lookupName, entry); }
+                catch (Exception ex) {
+                    System.err.println("[Enchanted Skins] " + lookupName + ": " + ex);
+                    entry.checked = System.currentTimeMillis();
+                } finally { BUSY.remove(key); }
+            });
+        }
+        ResourceLocation texture = entry.texture;
+        if (!entry.found || texture == null) return original;
+        if (entry.original == original) return entry.replacement;
+        // Explicit resource texture is necessary in 1.21.11 (the normal skin is a downloaded asset).
+        PlayerSkin replaced = new PlayerSkin(new ClientAsset.ResourceTexture(texture), original.cape(), original.elytra(),
+                entry.slim ? PlayerModelType.SLIM : PlayerModelType.WIDE, original.secure());
+        entry.original = original;
+        entry.replacement = replaced;
+        return replaced;
+    }
 
-	private static void fetch(String key, String name, Entry e) throws Exception {
-		long now = System.currentTimeMillis();
-		byte[] data = null;
-		boolean slim = false;
-		String etag = null;
-		if (name.equalsIgnoreCase(me) && file != null && Files.isRegularFile(file)) {
-			data = Files.readAllBytes(file);
-			slim = localSlim;
-			etag = "local-" + Files.getLastModifiedTime(file).toMillis();
-			if (etag.equals(e.etag)) {
-				e.t = now;
-				return;
-			}
-		} else if (!server.isEmpty()) {
-			HttpRequest.Builder rb = HttpRequest.newBuilder(URI.create(server + "/skin/" + URLEncoder.encode(name, StandardCharsets.UTF_8) + ".png"))
-					.timeout(Duration.ofSeconds(6)).GET();
-			if (e.etag != null && e.found) rb.header("If-None-Match", e.etag);
-			HttpResponse<byte[]> r = http.send(rb.build(), HttpResponse.BodyHandlers.ofByteArray());
-			int sc = r.statusCode();
-			if (sc == 304) {
-				e.t = now;
-				return;
-			}
-			if (sc == 200 && r.body().length > 0 && r.body().length <= 65536) {
-				data = r.body();
-				slim = "slim".equalsIgnoreCase(r.headers().firstValue("X-Model").orElse(""));
-				etag = r.headers().firstValue("ETag").orElse(null);
-			} else {
-				e.found = false;
-				e.t = now;
-				return;
-			}
-		} else {
-			e.t = now;
-			return;
-		}
-		final byte[] d = data;
-		final boolean fs = slim;
-		final String fe = etag;
-		Minecraft.getInstance().execute(() -> upload(e, d, fs, fe));
-	}
+    private static boolean isMe(String name) {
+        Minecraft mc = Minecraft.getInstance();
+        return (mc.player != null && name.equalsIgnoreCase(mc.player.getGameProfile().getName()))
+                || (!accountNick.isBlank() && name.equalsIgnoreCase(accountNick));
+    }
 
-	/** Рендер-поток: картинка -> текстура. Новый id на каждую загрузку, чтобы обновлённый скин подхватился сразу. */
-	private static void upload(Entry e, byte[] data, boolean slim, String etag) {
-		try {
-			NativeImage img = NativeImage.read(new ByteArrayInputStream(data));
-			if (img.getWidth() != 64 || img.getHeight() != 64) {
-				img.close();
-				e.found = false;
-				e.t = System.currentTimeMillis();
-				return;
-			}
-			DynamicTexture tex = makeTexture(img);
-			Identifier id = Identifier.fromNamespaceAndPath("enchanted_client", "skins/s" + (++seq));
-			Minecraft.getInstance().getTextureManager().register(id, tex);
-			e.slim = slim;
-			e.etag = etag;
-			e.lastOrig = null;
-			e.tex = id;
-			e.found = true;
-			e.t = System.currentTimeMillis();
-		} catch (Throwable t) {
-			e.found = false;
-			e.t = System.currentTimeMillis();
-		}
-	}
+    private static void fetch(String nick, Entry e) throws Exception {
+        Download download = null;
+        boolean myDefault = selectedNick.isBlank() && isMe(nick);
+        if (myDefault && localFile != null && Files.isRegularFile(localFile))
+            download = new Download(Files.readAllBytes(localFile), localSlim);
+        if (download == null && !server.isBlank()) download = request(server + "/skin/" + nick + ".png", "X-Model");
+        if (download == null) download = request("https://api.mcskin.me/skin/" + nick, "X-Skin-Model");
+        if (download != null) {
+            // Save the last successful lookup so temporary network outages don't mean Steve/Alex.
+            try {
+                Files.write(DISK.resolve(nick.toLowerCase(Locale.ROOT) + ".png"), download.bytes());
+                Files.writeString(DISK.resolve(nick.toLowerCase(Locale.ROOT) + ".model"), download.slim() ? "slim" : "classic");
+            } catch (Exception ignored) { }
+        } else {
+            Path cached = DISK.resolve(nick.toLowerCase(Locale.ROOT) + ".png");
+            if (Files.isRegularFile(cached))
+                download = new Download(Files.readAllBytes(cached),
+                        Files.exists(DISK.resolve(nick.toLowerCase(Locale.ROOT) + ".model"))
+                                && Files.readString(DISK.resolve(nick.toLowerCase(Locale.ROOT) + ".model")).trim().equals("slim"));
+        }
+        if (download == null) { e.checked = System.currentTimeMillis(); return; }
+        Download resolved = download;
+        Minecraft.getInstance().execute(() -> upload(e, resolved));
+    }
 
-	/** Конструктор DynamicTexture отличается между версиями игры - подбираем подходящий. */
-	private static DynamicTexture makeTexture(NativeImage img) throws Exception {
-		for (Constructor<?> c : DynamicTexture.class.getConstructors()) {
-			Class<?>[] pt = c.getParameterTypes();
-			DynamicTexture t = null;
-			if (pt.length == 1 && pt[0] == NativeImage.class) t = (DynamicTexture) c.newInstance(img);
-			else if (pt.length == 2 && pt[0] == Supplier.class && pt[1] == NativeImage.class) {
-				Supplier<String> label = () -> "enchanted skin";
-				t = (DynamicTexture) c.newInstance(label, img);
-			}
-			if (t != null) {
-				try {
-					t.getClass().getMethod("upload").invoke(t);
-				} catch (Throwable ignored) {
-				}
-				return t;
-			}
-		}
-		throw new IllegalStateException("DynamicTexture");
-	}
+    private static Download request(String url, String modelHeader) {
+        try {
+            HttpResponse<byte[]> response = HTTP.send(HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofSeconds(8)).header("User-Agent", "EnchantedClient/2.3")
+                    .GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+            byte[] bytes = response.body();
+            if (response.statusCode() != 200 || bytes.length < 24 || bytes.length > 65536 ||
+                    bytes[0] != (byte) 137 || bytes[1] != 80 || bytes[2] != 78 || bytes[3] != 71) return null;
+            return new Download(bytes, "slim".equalsIgnoreCase(response.headers().firstValue(modelHeader).orElse("classic")));
+        } catch (Exception exception) { return null; }
+    }
 
-	// ---------------- подмена PlayerSkin ----------------
-
-	/** Копия PlayerSkin с другой текстурой тела и моделью; плащ и элитры остаются. Структуру читаем через record-компоненты. */
-	private static PlayerSkin build(PlayerSkin o, Identifier tex, boolean slim) throws Exception {
-		RecordComponent[] rc = PlayerSkin.class.getRecordComponents();
-		Object[] v = new Object[rc.length];
-		Class<?>[] types = new Class<?>[rc.length];
-		for (int i = 0; i < rc.length; i++) {
-			types[i] = rc[i].getType();
-			Method m = rc[i].getAccessor();
-			m.setAccessible(true);
-			v[i] = m.invoke(o);
-		}
-		boolean bodyDone = false;
-		for (int i = 0; i < rc.length; i++) {
-			if (types[i].isEnum()) { // тип модели: SLIM / WIDE
-				for (Object c : types[i].getEnumConstants()) {
-					if (slim == ((Enum<?>) c).name().toUpperCase(Locale.ROOT).contains("SLIM")) {
-						v[i] = c;
-						break;
-					}
-				}
-			} else if (!bodyDone && v[i] != null && !(v[i] instanceof Boolean)) { // первый ассет - тело
-				v[i] = asset(v[i], tex);
-				bodyDone = true;
-			}
-		}
-		Constructor<PlayerSkin> k = PlayerSkin.class.getDeclaredConstructor(types);
-		k.setAccessible(true);
-		return k.newInstance(v);
-	}
-
-	private static Object asset(Object old, Identifier tex) throws Exception {
-		if (old instanceof Identifier) return tex;
-		for (Constructor<?> k : old.getClass().getDeclaredConstructors()) {
-			Class<?>[] pt = k.getParameterTypes();
-			Object[] a = new Object[pt.length];
-			boolean ok = pt.length > 0;
-			for (int j = 0; j < pt.length && ok; j++) {
-				if (pt[j] == Identifier.class) a[j] = tex;
-				else if (pt[j] == String.class) a[j] = "";
-				else ok = false;
-			}
-			if (ok) {
-				k.setAccessible(true);
-				return k.newInstance(a);
-			}
-		}
-		throw new IllegalStateException("asset");
-	}
+    private static void upload(Entry entry, Download skin) {
+        try {
+            NativeImage img = NativeImage.read(new ByteArrayInputStream(skin.bytes()));
+            if (img.getWidth() != 64 || img.getHeight() != 64) { img.close(); return; }
+            DynamicTexture texture = new DynamicTexture(() -> "Enchanted player skin", img);
+            texture.upload();
+            ResourceLocation id = ResourceLocation.fromNamespaceAndPath("enchanted_client", "skins/skin_" + System.nanoTime());
+            Minecraft.getInstance().getTextureManager().register(id, texture);
+            entry.texture = id;
+            entry.slim = skin.slim();
+            entry.original = null;
+            entry.found = true;
+            entry.checked = System.currentTimeMillis();
+        } catch (Exception ex) {
+            System.err.println("[Enchanted Skins] Texture upload: " + ex);
+            entry.checked = System.currentTimeMillis();
+        }
+    }
 }
