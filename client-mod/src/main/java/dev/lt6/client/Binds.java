@@ -10,7 +10,7 @@ final class Binds {
 	}
 
 	static void poll(Minecraft mc) {
-		long win = mc.getWindow().getWindow();
+		long win = mc.getWindow().handle();
 		if (win == 0L) return;
 		boolean free = mc.screen == null;
 		for (Cfg.Module m : Cfg.ALL) {

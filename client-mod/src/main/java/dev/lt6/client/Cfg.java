@@ -147,7 +147,12 @@ public final class Cfg {
 	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Шевроны с ровным вращением вокруг тела цели", VIS, true, ESP_STYLE, ESP_TURN_SECONDS);
 
 	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
-	public static final Module SKY = new Module("sky", "Custom Sky", "Шесть небес, переключение без перезапуска", VIS, false, SKY_PRESET).apply(() -> SkyPacks.select(SKY_PRESET.idx, SKY.enabled));
+	public static final Module SKY = new Module("sky", "Custom Sky", "Шесть небес, переключение без перезапуска", VIS, false, SKY_PRESET);
+
+	// Register the callback after SKY has been assigned: no self-reference in its initializer.
+	static {
+		SKY.apply(() -> SkyPacks.select(SKY_PRESET.idx, SKY.enabled));
+	}
 
 	public static final Module FPS = new Module("fps", "FPS Counter", "Частота кадров", HUD, true);
 
