@@ -143,12 +143,13 @@ public final class Cfg {
 	static final String VIS = "Visuals", HUD = "Utils", PLAYER = "Player";
 
 	// LT6 — all new visuals, no legacy modules.
-	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 0, "Neon Chevrons");
+	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 0, "Нейро", "Нурсултан ромб", "Целестиал духи");
 	public static final Slider ESP_TURN_SECONDS = new Slider("spin_period", "Скорость вращения", 0.15, 1.2, 0.05, 0.25, "с/об");
 	public static final Slider ESP_SIZE = new Slider("esp_size", "Размер ESP", 0.5, 1.75, 0.05, 1.0, "x");
 	public static final Color ESP_TINT = new Color("esp_color", "Цвет ESP", 0x1000000 + 0x39FF14);
 	public static final Slider ESP_GLOW = new Slider("esp_glow", "Сила свечения", 0, 200, 10, 140, "%");
-	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "6 оборотов поочерёдно в обе стороны с плавным разгоном и ярким свечением", VIS, true, ESP_STYLE, ESP_TURN_SECONDS, ESP_SIZE, ESP_TINT, ESP_GLOW);
+	public static final Bool ESP_RED_ON_HIT = new Bool("red_on_hit", "Покраснение при ударе", false);
+	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Три стиля: Нейро, Нурсултан ромб и Целестиал духи", VIS, true, ESP_STYLE, ESP_TURN_SECONDS, ESP_SIZE, ESP_TINT, ESP_GLOW, ESP_RED_ON_HIT);
 
 	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
 	public static final Module SKY = new Module("sky", "Custom Sky", "Шесть небес, переключение без перезапуска", VIS, false, SKY_PRESET);
