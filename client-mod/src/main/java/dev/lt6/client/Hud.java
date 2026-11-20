@@ -9,7 +9,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.EntityHitResult;
 
 /**
- * LT6 Target ESP: four neon-green chevrons orbit the torso at constant angular velocity,
+ * LT6 Target ESP: four neon-green chevrons orbit the torso with smoothly varying speed,
  * without a center dot. The orbit stays circular in GUI pixels regardless of aspect ratio.
  *
  * The marker follows the interpolated WORLD position of the target's torso. Its
@@ -22,14 +22,15 @@ public final class Hud {
     private static final long HOLD_MS = 4000L;
     private static final long FADE_IN_MS = 150L;
     private static final long FADE_OUT_MS = 260L;
-    // A continuous, monotonic time-based rotation. Changing the speed slider must not
+    private static final long HIT_RECOIL_MS = 340L;
+    // Monotonic angle with a smooth sinusoidal speed variation. Changing the slider must not
     // make the arrows snap to a new angle. Keeping a phase origin achieves that.
     private static final double TWO_PI = Math.PI * 2.0;
     private static long angleOriginNs = System.nanoTime();
     private static double angleOriginRadians = 0.0;
     private static double activeTurnSeconds = 3.0;
     private static LivingEntity target;
-    private static long acquiredAt, expiresAt;
+    private static long acquiredAt, expiresAt, lastAttackAt;
 
     // Camera basis calculated once per frame.
     private static double camX, camY, camZ;
@@ -45,9 +46,18 @@ public final class Hud {
     static void hit(Entity e) {
         if (!(e instanceof LivingEntity living) || !living.isAlive()) return;
         long now = System.currentTimeMillis();
-        if (living != target || now >= expiresAt) acquiredAt = now;
+        if (living != target || now >= expiresAt) {
+            acquiredAt = now;
+            lastAttackAt = 0L;
+        }
         target = living;
         expiresAt = now + HOLD_MS;
+    }
+
+    /** An actual local attack attempt triggers a short recoil and red-tinted glow. */
+    static void attack(Entity e) {
+        hit(e);
+        if (e instanceof LivingEntity && e == target) lastAttackAt = System.currentTimeMillis();
     }
 
     public static void render(GuiGraphics graphics, DeltaTracker delta) {
@@ -103,7 +113,7 @@ public final class Hud {
         if (depth <= 0.05) return;
         double projectedHeight = height * screenH / (2.0 * depth * halfFovTan);
         if (!Double.isFinite(projectedHeight)) return;
-        double radius = projectedHeight * 0.145;
+        double radius = projectedHeight * 0.145 * Cfg.ESP_SIZE.v;
         if (radius < 1.5) return; // Do not inflate distant targets.
 
         float fadeIn = clamp01((now - acquiredAt) / (float) FADE_IN_MS);
@@ -111,17 +121,21 @@ public final class Hud {
         float opacity = fadeIn * fadeOut;
         if (opacity <= 0.01f) return;
 
-        // True constant-speed rotation: no easing, pulsing or tick-based angle steps.
-        // The four chevrons retain identical angular spacing throughout the orbit.
+        // Spawn and loss easing affect only scale/opacity, never the world-space anchor.
+        float enter = fadeIn * fadeIn * (3f - 2f * fadeIn);
+        float spawnScale = 0.18f + 0.82f * enter;
+        float recoil = lastAttackAt <= 0 ? 0f : clamp01(1f - (now - lastAttackAt) / (float) HIT_RECOIL_MS);
+        recoil *= recoil;
+        int tint = Gfx.mix(0xFF39FF14, 0xFFFF4652, recoil * 0.85f);
         Gfx.alphaMul = 1f;
         float angle = continuousAngle(System.nanoTime(), Cfg.ESP_TURN_SECONDS.v);
-        drawMarker(graphics, centerX, centerY, radius, opacity, angle);
+        drawMarker(graphics, centerX, centerY, radius * spawnScale * (1.0 + 0.16 * recoil), opacity, angle, tint, recoil);
     }
 
     /**
-     * Continuous angular velocity in real time. A slider change preserves the
-     * current phase, instead of visibly teleporting the arrows to a new position.
-     * Screen refresh rate does not affect the number of revolutions per second.
+     * Nonuniform but smooth rotation in real time. Modulating the angle with a sine
+     * gives speed between 40% and 160% of average, without reversing or snapping.
+     * The stored base phase preserves continuity when the speed slider changes.
      */
     private static float continuousAngle(long nowNs, double turnSeconds) {
         double seconds = Math.max(0.5, turnSeconds);
@@ -134,7 +148,7 @@ public final class Hud {
         }
         double angle = angleOriginRadians
                 + (nowNs - angleOriginNs) * 1e-9 * (TWO_PI / activeTurnSeconds);
-        return (float) (angle % TWO_PI);
+        return (float) ((angle + 0.60 * Math.sin(angle)) % TWO_PI);
     }
 
     private static double lerp(double t, double a, double b) {
@@ -146,7 +160,7 @@ public final class Hud {
     }
 
     /** Draw four ∧, ∨, < and > symbols pointing OUTWARDS, as in the reference. */
-    private static void drawMarker(GuiGraphics g, double cx, double cy, double radius, float opacity, float angle) {
+    private static void drawMarker(GuiGraphics g, double cx, double cy, double radius, float opacity, float angle, int tint, float recoil) {
         // A local coordinate system keeps thickness, spacing and glow in scale
         // with the target. Scale is never clamped to a minimum screen size.
         float scale = (float) (radius / 40.0);
@@ -158,10 +172,10 @@ public final class Hud {
 
         // Bloom is intentionally understated so arrow shapes remain crisp.
         for (int glow = 2; glow >= 1; glow--) {
-            int color = Gfx.a(0xFF39FF14, opacity * (glow == 1 ? 0.20f : 0.08f));
+            int color = Gfx.a(tint, opacity * (glow == 1 ? 0.20f : 0.08f) * (1f + 0.60f * recoil));
             chevrons(g, 4 + glow * 5, color);
         }
-        chevrons(g, 4, Gfx.a(0xFF39FF14, opacity));
+        chevrons(g, 4, Gfx.a(tint, opacity));
         pose.popMatrix();
     }
 
