@@ -141,7 +141,6 @@
               </StackPanel>
               <CheckBox x:Name="VerifyBox" Content="Проверять файлы игры при запуске" Foreground="#B1C4D7" Margin="2,18,0,0"/>
             </StackPanel>
-            </StackPanel>
 
             <StackPanel Grid.Row="3">
               <Button x:Name="PlayBtn" Style="{StaticResource Play}" Content="▶  ИГРАТЬ" Click="Play_Click"/>
