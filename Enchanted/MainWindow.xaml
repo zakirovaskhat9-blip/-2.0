@@ -1,25 +1,25 @@
 <Window x:Class="Enchanted.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="LT6MS лаунчер" Width="1280" Height="820" ResizeMode="CanMinimize"
+        Title="LT6MS Launcher" Width="1240" Height="810" ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen" WindowStyle="None" AllowsTransparency="True"
-        Background="Transparent" KeyDown="Window_KeyDown" Icon="enchanted.ico" FontFamily="Segoe UI">
+        Background="Transparent" KeyDown="Window_KeyDown" Icon="enchanted.ico" FontFamily="Segoe UI" UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Window.Resources>
-    <SolidColorBrush x:Key="Acc" Color="#F2F2F2"/>
-    <SolidColorBrush x:Key="Dim" Color="#9A9A9A"/>
+    <SolidColorBrush x:Key="Acc" Color="#99DBCD"/>
+    <SolidColorBrush x:Key="Dim" Color="#A4BACE"/>
 
     <Style x:Key="Play" TargetType="Button">
-      <Setter Property="Foreground" Value="#0A0A0A"/><Setter Property="FontSize" Value="22"/><Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="#122D37"/><Setter Property="FontSize" Value="22"/><Setter Property="FontWeight" Value="Bold"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="b" CornerRadius="16" Background="#F2F2F2" Height="60">
+            <Border x:Name="b" CornerRadius="16" Height="60" BorderThickness="1" BorderBrush="#C5E7F8ED"><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#A3E5D0" Offset="0"/><GradientStop Color="#78C4AD" Offset="1"/></LinearGradientBrush></Border.Background><Border.Effect><DropShadowEffect Color="#3DADA7" BlurRadius="22" ShadowDepth="0" Opacity="0.30"/></Border.Effect>
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#FFFFFF"/></Trigger>
-              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="b" Property="Background" Value="#555555"/></Trigger>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#C2F0E1"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="b" Property="Opacity" Value="0.48"/></Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
@@ -31,11 +31,11 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="b" CornerRadius="12" Background="#1A1A1A" Padding="12,9" Margin="0,0,8,0">
+            <Border x:Name="b" CornerRadius="12" Background="#283B53" BorderBrush="#486580" BorderThickness="1" Padding="12,9" Margin="0,0,8,0">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#2A2A2A"/></Trigger>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#38536C"/></Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
@@ -47,12 +47,12 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="RadioButton">
-            <Border x:Name="b" CornerRadius="12" Background="#1A1A1A" Padding="14,10" Margin="0,0,8,0">
+            <Border x:Name="b" CornerRadius="12" Background="#23374E" BorderBrush="#4D6680" BorderThickness="1" Padding="14,10" Margin="0,0,8,0">
               <ContentPresenter HorizontalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="b" Property="Background" Value="#303030"/><Setter Property="Foreground" Value="White"/>
+                <Setter TargetName="b" Property="Background" Value="#3B666F"/><Setter Property="Foreground" Value="White"/>
               </Trigger>
               <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#2A2A2A"/></Trigger>
             </ControlTemplate.Triggers>
@@ -66,7 +66,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="TextBox">
-            <Border CornerRadius="12" Background="#1A1A1A" Padding="14,11">
+            <Border CornerRadius="12" Background="#1C3046" BorderBrush="#4B627F" BorderThickness="1" Padding="14,11">
               <ScrollViewer x:Name="PART_ContentHost"/>
             </Border>
           </ControlTemplate>
@@ -83,7 +83,7 @@
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#33FFFFFF"/></Trigger>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#36516D"/></Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
@@ -91,17 +91,17 @@
     </Style>
   </Window.Resources>
 
-  <Border CornerRadius="22" BorderBrush="#33FFFFFF" BorderThickness="1">
+  <Border CornerRadius="24" BorderBrush="#5C7D9C" BorderThickness="1">
     <Border.Background>
       <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#050505" Offset="0"/><GradientStop Color="#101010" Offset="0.5"/><GradientStop Color="#000000" Offset="1"/>
+        <GradientStop Color="#1B2E49" Offset="0"/><GradientStop Color="#16283D" Offset="0.53"/><GradientStop Color="#282B4A" Offset="1"/>
       </LinearGradientBrush>
     </Border.Background>
     <Grid Margin="0">
       <Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition Height="*"/></Grid.RowDefinitions>
 
       <Grid x:Name="Title" Background="Transparent" MouseLeftButtonDown="Title_Down">
-        <TextBlock Text="LT6MS LAUNCHER" Foreground="#9A9A9A" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="26,0,0,0"/>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="26,0,0,0"><Ellipse Width="8" Height="8" Fill="#98DDC8" Margin="0,0,12,0"/><TextBlock Text="LT6MS  /  LAUNCHER" Foreground="#C4E6EA" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/></StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,12,0">
           <Button Style="{StaticResource Chrome}" Content="—" Click="Min_Click"/>
           <Button Style="{StaticResource Chrome}" Content="✕" Click="Close_Click"/>
@@ -112,52 +112,48 @@
         <Grid.ColumnDefinitions><ColumnDefinition Width="380"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
 
         <!-- левая панель -->
-        <Border CornerRadius="20" Background="#CC0C0C0C" BorderBrush="#22FFFFFF" BorderThickness="1" Padding="24">
+        <Border CornerRadius="20" Background="#CE1A3049" BorderBrush="#546D8C" BorderThickness="1" Padding="24">
           <Grid>
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Horizontal">
-              <Border Width="64" Height="64" CornerRadius="18" Background="#0F0F0F" BorderBrush="#F2F2F2" BorderThickness="2">
-                <TextBlock Text="L" FontSize="42" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center">
-                  <TextBlock.Effect><DropShadowEffect Color="#FFFFFF" BlurRadius="22" ShadowDepth="0" Opacity="0.95"/></TextBlock.Effect>
-                </TextBlock>
-              </Border>
+              <Border Width="68" Height="68" CornerRadius="17" Background="#263F5A" BorderBrush="#6684A2" BorderThickness="1"><Image Source="enchanted.ico" Width="64" Height="64" Stretch="Uniform"/></Border>
               <StackPanel Margin="16,0,0,0" VerticalAlignment="Center">
                 <TextBlock Text="LT6MS" FontSize="26" FontWeight="Bold" Foreground="White"/>
-                <TextBlock Text="лаунчер Minecraft" FontSize="13" Foreground="#9A9A9A"/>
+                <TextBlock Text="Твой Minecraft. Твой стиль." FontSize="12" Foreground="#AFD1CF"/>
               </StackPanel>
             </StackPanel>
 
             <StackPanel Grid.Row="1" Margin="0,26,0,0">
-              <TextBlock Text="Ник" Foreground="#9A9A9A" Margin="2,0,0,6"/>
+              <TextBlock Text="Ник" Foreground="#B1C4D7" Margin="2,0,0,6"/>
               <TextBox x:Name="NickBox" Style="{StaticResource Field}" MaxLength="16"/>
-              <TextBlock Text="Версия" Foreground="#9A9A9A" Margin="2,18,0,6"/>
+              <TextBlock Text="Версия" Foreground="#B1C4D7" Margin="2,18,0,6"/>
               <StackPanel Orientation="Horizontal">
                 <RadioButton x:Name="V1" Style="{StaticResource Seg}" Content="1.21.11" GroupName="v"/>
                 <RadioButton x:Name="V2" Style="{StaticResource Seg}" Content="1.21.4" GroupName="v"/>
               </StackPanel>
-              <TextBlock Text="Источник загрузки" Foreground="#9A9A9A" Margin="2,18,0,6"/>
+              <TextBlock Text="Источник загрузки" Foreground="#B1C4D7" Margin="2,18,0,6"/>
               <StackPanel Orientation="Horizontal">
                 <RadioButton x:Name="S1" Style="{StaticResource Seg}" Content="Зеркала" GroupName="s"/>
                 <RadioButton x:Name="S2" Style="{StaticResource Seg}" Content="Официальные" GroupName="s"/>
               </StackPanel>
-              <CheckBox x:Name="VerifyBox" Content="Проверять файлы игры при запуске" Foreground="#9A9A9A" Margin="2,18,0,0"/>
-              <TextBlock Text="Скин" Foreground="#9A9A9A" Margin="2,18,0,6"/>
+              <CheckBox x:Name="VerifyBox" Content="Проверять файлы игры при запуске" Foreground="#B1C4D7" Margin="2,18,0,0"/>
+              <TextBlock Text="Скин" Foreground="#B1C4D7" Margin="2,18,0,6"/>
               <StackPanel Orientation="Horizontal">
-                <Border Width="46" Height="46" CornerRadius="10" Background="#1A1A1A" Margin="0,0,10,0" ClipToBounds="True">
+                <Border Width="46" Height="46" CornerRadius="10" Background="#283E58" Margin="0,0,10,0" ClipToBounds="True">
                   <Image x:Name="SkinFace" Margin="6" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                 </Border>
                 <Button Style="{StaticResource Ghost}" Content="Выбрать скин…" Click="PickSkin_Click" VerticalAlignment="Center"/>
-                <CheckBox x:Name="SlimBox" Content="Slim (Alex)" Foreground="#9A9A9A" VerticalAlignment="Center" Checked="Slim_Changed" Unchecked="Slim_Changed"/>
+                <CheckBox x:Name="SlimBox" Content="Slim (Alex)" Foreground="#B1C4D7" VerticalAlignment="Center" Checked="Slim_Changed" Unchecked="Slim_Changed"/>
               </StackPanel>
             </StackPanel>
 
             <StackPanel Grid.Row="3">
-              <Button x:Name="PlayBtn" Style="{StaticResource Play}" Content="ИГРАТЬ" Click="Play_Click"/>
-              <ProgressBar x:Name="Bar" Height="8" Margin="0,16,0,0" Minimum="0" Maximum="1" Foreground="#F2F2F2" Background="#1A1A1A" BorderThickness="0"/>
-              <TextBlock x:Name="StatusText" Text="Готов к запуску" Foreground="#9A9A9A" Margin="2,10,0,16" TextWrapping="Wrap" MinHeight="36"/>
+              <Button x:Name="PlayBtn" Style="{StaticResource Play}" Content="▶  ИГРАТЬ" Click="Play_Click"/>
+              <ProgressBar x:Name="Bar" Height="8" Margin="0,16,0,0" Minimum="0" Maximum="1" Foreground="#95DEC8" Background="#2D465E" BorderThickness="0"/>
+              <TextBlock x:Name="StatusText" Text="Готов к запуску" Foreground="#B1C4D7" Margin="2,10,0,16" TextWrapping="Wrap" MinHeight="36"/>
               <WrapPanel>
                 <Button Style="{StaticResource Ghost}" Content="Minecraft" Click="OpenGame_Click"/>
                 <Button Style="{StaticResource Ghost}" Content="Моды" Click="OpenMods_Click"/>
@@ -168,23 +164,23 @@
         </Border>
 
         <!-- правая панель: состояние модов -->
-        <Border Grid.Column="2" CornerRadius="20" Background="#CC0C0C0C" BorderBrush="#22FFFFFF" BorderThickness="1" Padding="28">
+        <Border Grid.Column="2" CornerRadius="20" Background="#C81D3249" BorderBrush="#546D8C" BorderThickness="1" Padding="24">
           <Grid>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <StackPanel>
-              <TextBlock Text="Моды" FontSize="24" FontWeight="Bold" Foreground="White"/>
-              <TextBlock Text="Недостающие моды докачиваются при запуске: Release → Modrinth → MCIM → CurseForge." Foreground="#9A9A9A" Margin="0,6,0,18" TextWrapping="Wrap"/>
+              <Border CornerRadius="16" BorderBrush="#48748D9A" BorderThickness="1" Padding="21,18" Margin="0,0,0,18"><Border.Background><LinearGradientBrush StartPoint="0,1" EndPoint="1,0"><GradientStop Color="#24465C" Offset="0"/><GradientStop Color="#2C5668" Offset="0.55"/><GradientStop Color="#494A74" Offset="1"/></LinearGradientBrush></Border.Background><StackPanel><TextBlock Text="Твой Minecraft." FontSize="27" FontWeight="SemiBold" Foreground="#F1F8FC"/><TextBlock Text="Твой стиль." FontSize="27" FontWeight="SemiBold" Foreground="#A4E4CD" Margin="0,0,0,8"/><TextBlock Text="Играй с LT6 — твои настройки, моды и визуальные эффекты." Foreground="#CADDE6" FontSize="12" TextWrapping="Wrap"/></StackPanel></Border><TextBlock Text="Моды LT6" FontSize="22" FontWeight="SemiBold" Foreground="#F1F8FC"/>
+              <TextBlock Text="Необходимые файлы модов загружаются и проверяются при запуске." Foreground="#B1C4D7" Margin="0,6,0,18" TextWrapping="Wrap"/>
             </StackPanel>
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
               <ItemsControl x:Name="ModsList">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <Border CornerRadius="12" Background="#151515" Padding="14,10" Margin="0,0,0,8">
+                    <Border CornerRadius="12" Background="#294158" BorderBrush="#415C76" BorderThickness="1" Padding="14,11" Margin="0,0,0,8">
                       <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="22"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Ellipse Width="10" Height="10" Fill="{Binding Dot}" HorizontalAlignment="Left"/>
                         <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="White" FontSize="15"/>
-                        <TextBlock Grid.Column="2" Text="{Binding State}" Foreground="#9A9A9A" FontSize="13"/>
+                        <TextBlock Grid.Column="2" Text="{Binding State}" Foreground="#B1C4D7" FontSize="13"/>
                       </Grid>
                     </Border>
                   </DataTemplate>
@@ -192,9 +188,9 @@
               </ItemsControl>
             </ScrollViewer>
             <StackPanel Grid.Row="2" Margin="0,14,0,0">
-              <TextBlock Text="Сервер скинов (адрес, чтобы видеть скины других игроков)" Foreground="#9A9A9A" Margin="2,0,0,6"/>
+              <TextBlock Text="Сервер скинов (адрес, чтобы видеть скины других игроков)" Foreground="#B1C4D7" Margin="2,0,0,6"/>
               <TextBox x:Name="SkinServerBox" Style="{StaticResource Field}" FontSize="13" LostFocus="SkinServer_LostFocus"/>
-              <TextBlock Text="Меню клиента в игре — правый Shift. F11 — полный экран." Foreground="#9A9A9A" Margin="0,12,0,0"/>
+              <TextBlock Text="Меню клиента в игре — правый Shift. F11 — полный экран." Foreground="#B1C4D7" Margin="0,12,0,0"/>
             </StackPanel>
           </Grid>
         </Border>
