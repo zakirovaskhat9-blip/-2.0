@@ -36,7 +36,7 @@ public final class LT6Client implements ClientModInitializer {
         });
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
             if (world.isClientSide() && player == Minecraft.getInstance().player) {
-                Hud.hit(entity);
+                Hud.attack(entity);
                 HitFX.hit(entity);
             }
             return InteractionResult.PASS;
