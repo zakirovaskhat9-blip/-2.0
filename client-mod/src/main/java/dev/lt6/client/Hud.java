@@ -23,12 +23,19 @@ public final class Hud {
     private static final long FADE_IN_MS = 150L;
     private static final long FADE_OUT_MS = 260L;
     private static final long HIT_RECOIL_MS = 340L;
-    // Monotonic angle with a smooth sinusoidal speed variation. Changing the slider must not
-    // make the arrows snap to a new angle. Keeping a phase origin achieves that.
+    // Six full turns clockwise, a short stop, six full turns counterclockwise.
+    // Velocity follows smooth acceleration -> 1 second at peak -> rapid but
+    // smooth braking. At the turn-around speed reaches zero before reversing.
     private static final double TWO_PI = Math.PI * 2.0;
-    private static long angleOriginNs = System.nanoTime();
-    private static double angleOriginRadians = 0.0;
-    private static double activeTurnSeconds = 3.0;
+    private static final double TURNS_PER_DIRECTION = 6.0;
+    private static final double RAMP_UP = 0.72;
+    private static final double HOLD_PEAK = 1.0;
+    private static final double RAMP_DOWN = 0.30;
+    private static final double HALF_CYCLE = RAMP_UP + HOLD_PEAK + RAMP_DOWN;
+    private static final double PEAK_RADIANS_PER_SECOND =
+            TURNS_PER_DIRECTION * TWO_PI / (0.5 * RAMP_UP + HOLD_PEAK + 0.5 * RAMP_DOWN);
+    private static long lastFrameNs;
+    private static double rotationClockSeconds;
     private static LivingEntity target;
     private static long acquiredAt, expiresAt, lastAttackAt;
 
@@ -129,26 +136,41 @@ public final class Hud {
         int tint = Gfx.mix(0xFF000000 | Cfg.ESP_TINT.rgb(), 0xFFFF4652, recoil);
         Gfx.alphaMul = 1f;
         float angle = continuousAngle(System.nanoTime(), Cfg.ESP_TURN_SECONDS.v);
-        drawMarker(graphics, centerX, centerY, radius * spawnScale * (1.0 + 0.16 * recoil), opacity, angle, tint, recoil);
+        drawMarker(graphics, centerX, centerY, radius * spawnScale * (1.0 + 0.16 * recoil),
+                opacity, angle, tint, recoil);
     }
 
     /**
-     * Nonuniform but smooth rotation in real time. Modulating the angle with a sine
-     * gives speed between 40% and 160% of average, without reversing or snapping.
-     * The stored base phase preserves continuity when the speed slider changes.
+     * The animation phase is integrated frame-to-frame so changing the speed
+     * setting never teleports the marker. Each half-cycle has exactly six
+     * revolutions and a smooth reversal at zero angular velocity.
+     *
+     * The speed slider is the peak seconds/turn. Default 0.25 gives a
+     * one-second high-speed plateau, with 0.72s acceleration and 0.30s braking.
      */
     private static float continuousAngle(long nowNs, double turnSeconds) {
-        double seconds = Math.max(0.5, turnSeconds);
-        if (Math.abs(seconds - activeTurnSeconds) > 0.00001) {
-            angleOriginRadians = angleOriginRadians
-                    + (nowNs - angleOriginNs) * 1e-9 * (TWO_PI / activeTurnSeconds);
-            angleOriginRadians %= TWO_PI;
-            angleOriginNs = nowNs;
-            activeTurnSeconds = seconds;
+        if (lastFrameNs == 0L) lastFrameNs = nowNs;
+        double frameSeconds = Math.max(0.0, Math.min(0.10, (nowNs - lastFrameNs) * 1e-9));
+        lastFrameNs = nowNs;
+        double timeScale = 0.25 / Math.max(0.15, turnSeconds);
+        rotationClockSeconds = (rotationClockSeconds + frameSeconds * timeScale) % (2.0 * HALF_CYCLE);
+
+        boolean reverse = rotationClockSeconds >= HALF_CYCLE;
+        double t = reverse ? rotationClockSeconds - HALF_CYCLE : rotationClockSeconds;
+        double traveled;
+        if (t < RAMP_UP) {
+            double u = t / RAMP_UP;
+            // Integral of smoothstep(0 -> 1): continuous speed and acceleration.
+            traveled = PEAK_RADIANS_PER_SECOND * RAMP_UP * (u * u * u - 0.5 * u * u * u * u);
+        } else if (t < RAMP_UP + HOLD_PEAK) {
+            traveled = PEAK_RADIANS_PER_SECOND * (0.5 * RAMP_UP + t - RAMP_UP);
+        } else {
+            double u = (t - RAMP_UP - HOLD_PEAK) / RAMP_DOWN;
+            // Integral of 1 - smoothstep(0 -> 1), ending at zero angular speed.
+            traveled = PEAK_RADIANS_PER_SECOND * (0.5 * RAMP_UP + HOLD_PEAK
+                    + RAMP_DOWN * (u - u * u * u + 0.5 * u * u * u * u));
         }
-        double angle = angleOriginRadians
-                + (nowNs - angleOriginNs) * 1e-9 * (TWO_PI / activeTurnSeconds);
-        return (float) ((angle + 0.60 * Math.sin(angle)) % TWO_PI);
+        return (float) (reverse ? -traveled : traveled);
     }
 
     private static double lerp(double t, double a, double b) {
@@ -159,52 +181,18 @@ public final class Hud {
         return Math.max(0f, Math.min(1f, value));
     }
 
-    /** Draw four ∧, ∨, < and > symbols pointing OUTWARDS, as in the reference. */
-    private static void drawMarker(GuiGraphics g, double cx, double cy, double radius, float opacity, float angle, int tint, float recoil) {
-        // A local coordinate system keeps thickness, spacing and glow in scale
-        // with the target. Scale is never clamped to a minimum screen size.
+    /** Draw four smoothly rounded, supersampled chevrons instead of thick rectangles. */
+    private static void drawMarker(GuiGraphics g, double cx, double cy, double radius,
+                                   float opacity, float angle, int tint, float recoil) {
         float scale = (float) (radius / 40.0);
+        float glowPulse = (float) (0.94 + 0.06 * Math.sin(System.nanoTime() * 1.6e-9));
+        double glow = Cfg.ESP_GLOW.v * (glowPulse + recoil * 0.45f);
         var pose = g.pose();
         pose.pushMatrix();
         pose.translate((float) cx, (float) cy);
-        pose.rotate(angle); // rotate the four chevrons as one, around the exact target-body anchor
+        pose.rotate(angle);
         pose.scale(scale, scale);
-
-        // Bloom is intentionally understated so arrow shapes remain crisp.
-        for (int glow = 2; glow >= 1; glow--) {
-            int color = Gfx.a(tint, opacity * (glow == 1 ? 0.20f : 0.08f) * (1f + 0.60f * recoil));
-            chevrons(g, 4 + glow * 5, color);
-        }
-        chevrons(g, 4, Gfx.a(tint, opacity));
-        pose.popMatrix();
-    }
-
-    private static void chevrons(GuiGraphics g, int width, int color) {
-        // Top: ^
-        stroke(g, -12, -28, 0, -40, width, color);
-        stroke(g, 0, -40, 12, -28, width, color);
-        // Right: >
-        stroke(g, 28, -12, 40, 0, width, color);
-        stroke(g, 40, 0, 28, 12, width, color);
-        // Bottom: v
-        stroke(g, -12, 28, 0, 40, width, color);
-        stroke(g, 0, 40, 12, 28, width, color);
-        // Left: <
-        stroke(g, -28, -12, -40, 0, width, color);
-        stroke(g, -40, 0, -28, 12, width, color);
-    }
-
-    /** Rotate a filled rectangle to produce a diagonal, solid line segment. */
-    private static void stroke(GuiGraphics g, int x0, int y0, int x1, int y1, int width, int color) {
-        double dx = x1 - x0;
-        double dy = y1 - y0;
-        int length = (int) Math.round(Math.hypot(dx, dy));
-        if (length == 0) return;
-        var pose = g.pose();
-        pose.pushMatrix();
-        pose.translate(x0, y0);
-        pose.rotate((float) Math.atan2(dy, dx));
-        g.fill(0, -width / 2, length, (width + 1) / 2, color);
+        TargetEspSprite.render(g, tint, opacity, glow);
         pose.popMatrix();
     }
 
