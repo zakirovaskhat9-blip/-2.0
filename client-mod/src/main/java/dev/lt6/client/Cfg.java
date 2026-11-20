@@ -85,6 +85,7 @@ public final class Cfg {
 		private void fromIdx(int d) {
 			if (d == RAINBOW) { idx = RAINBOW; return; }
 			idx = 0;
+			if (d >= 0x1000000) { setCustom(d - 0x1000000); return; }
 			setCustom(CRGB[Math.floorMod(d, CRGB.length - 1)]);
 		}
 
@@ -145,7 +146,8 @@ public final class Cfg {
 	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 0, "Neon Chevrons");
 	public static final Slider ESP_TURN_SECONDS = new Slider("turn_seconds", "Оборот за", 1.2, 8.0, 0.2, 3.0, "с");
 	public static final Slider ESP_SIZE = new Slider("esp_size", "Размер ESP", 0.5, 1.75, 0.05, 1.0, "x");
-	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Плавно меняющее скорость вращение вокруг тела цели", VIS, true, ESP_STYLE, ESP_TURN_SECONDS, ESP_SIZE);
+	public static final Color ESP_TINT = new Color("esp_color", "Цвет ESP", 0x1000000 + 0x39FF14);
+	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Плавно меняющее скорость вращение вокруг тела цели", VIS, true, ESP_STYLE, ESP_TURN_SECONDS, ESP_SIZE, ESP_TINT);
 
 	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
 	public static final Module SKY = new Module("sky", "Custom Sky", "Шесть небес, переключение без перезапуска", VIS, false, SKY_PRESET);
