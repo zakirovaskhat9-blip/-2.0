@@ -37,15 +37,6 @@ final class TargetEspSprite {
             {-23,-13,  -36,   0}, {-36, 0,  -23,  13}
     };
 
-    // Curved arms make the second style noticeably softer, with rounded corners
-    // and subtly bowed sides. Points are quadratic Bezier: start, control, end.
-    private static final double[][] DIAMOND_CURVES = {
-            {-13,-23, -10,-35, 0,-36}, {0,-36, 10,-35, 13,-23},
-            {23,-13, 35,-10, 36,0}, {36,0, 35,10, 23,13},
-            {13,23, 10,35, 0,36}, {0,36, -10,35, -13,23},
-            {-23,13, -35,10, -36,0}, {-36,0, -35,-10, -23,-13}
-    };
-
     private static boolean initialized;
     private static boolean failed;
 
@@ -77,8 +68,8 @@ final class TargetEspSprite {
 
     private static void initialize() {
         try {
-            register(CORE_ID, makeImage(false, false), "LT6 Neuro core");
-            register(BLOOM_ID, makeImage(true, false), "LT6 Neuro bloom");
+            register(CORE_ID, makeImage(false, false), "LT6 Standard core");
+            register(BLOOM_ID, makeImage(true, false), "LT6 Standard bloom");
             register(DIAMOND_CORE, makeImage(false, true), "LT6 Nursultan rounded core");
             register(DIAMOND_BLOOM, makeImage(true, true), "LT6 Nursultan bloom");
             initialized = true;
@@ -103,22 +94,16 @@ final class TargetEspSprite {
             for (int x = 0; x < TEXTURE_SIZE; x++) {
                 double px = (x + 0.5) * multiplier - DRAW_SIZE / 2.0;
                 double minDist2 = Double.POSITIVE_INFINITY;
-                if (diamond) {
-                    for (double[] curve : DIAMOND_CURVES) {
-                        minDist2 = Math.min(minDist2, distSquaredToCurve(px, py, curve));
-                    }
-                } else {
-                    for (double[] segment : SEGMENTS) {
-                        minDist2 = Math.min(minDist2, distSquaredToSegment(
-                                px, py, segment[0], segment[1], segment[2], segment[3]));
-                    }
+                for (double[] segment : SEGMENTS) {
+                    minDist2 = Math.min(minDist2, distSquaredToSegment(
+                            px, py, segment[0], segment[1], segment[2], segment[3]));
                 }
 
                 double alpha;
                 if (bloom) {
                     // Broad Gaussian halo: strong near the stroke, feathered out
                     // at both tips and corners with a fully transparent background.
-                    double spread = diamond ? 1.35 : 1.0;
+                    double spread = diamond ? 1.12 : 1.0;
                     alpha = 0.70 * Math.exp(-minDist2 / (2.0 * 5.0 * spread * 5.0 * spread))
                             + 0.36 * Math.exp(-minDist2 / (2.0 * 11.0 * spread * 11.0 * spread));
                 } else {
@@ -126,7 +111,7 @@ final class TargetEspSprite {
                     // joins, with subpixel coverage for much cleaner diagonals.
                     double d = Math.sqrt(minDist2);
                     double edge = Math.max(0.0, Math.min(1.0,
-                            ((diamond ? 5.0 : 2.75) - d) / (diamond ? 1.5 : 1.3)));
+                            ((diamond ? 4.95 : 2.75) - d) / 1.3));
                     alpha = edge * edge * (3.0 - 2.0 * edge);
                 }
                 int a = (int) Math.round(255.0 * Math.max(0.0, Math.min(1.0, alpha)));
@@ -134,23 +119,6 @@ final class TargetEspSprite {
             }
         }
         return image;
-    }
-
-    /** Fast quadratic distance approximation at texture generation time only. */
-    private static double distSquaredToCurve(double x, double y, double[] curve) {
-        double best = Double.POSITIVE_INFINITY;
-        double previousX = curve[0];
-        double previousY = curve[1];
-        for (int i = 1; i <= 14; i++) {
-            double t = i / 14.0;
-            double inv = 1.0 - t;
-            double bx = inv * inv * curve[0] + 2.0 * inv * t * curve[2] + t * t * curve[4];
-            double by = inv * inv * curve[1] + 2.0 * inv * t * curve[3] + t * t * curve[5];
-            best = Math.min(best, distSquaredToSegment(x, y, previousX, previousY, bx, by));
-            previousX = bx;
-            previousY = by;
-        }
-        return best;
     }
 
     private static double distSquaredToSegment(double x, double y,
