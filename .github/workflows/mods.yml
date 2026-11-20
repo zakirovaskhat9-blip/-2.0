@@ -12,7 +12,7 @@ on:
         default: "1.21.11 1.21.4"
       mods:
         description: "Моды (slug через пробел; slug@версия_мода или slug@версия_игры:версия_мода - закрепить версию)"
-        default: "fabric-api sodium lithium ferrite-core modernfix immediatelyfast memoryleakfix modmenu ebe cull-leaves moreculling entityculling immersive-optimization too-many-entities entityopt c2me-fabric async iris ggtu"
+        default: "fabric-api sodium lithium ferrite-core modernfix immediatelyfast entityculling modmenu skyboxify"
 
 permissions:
   contents: write
@@ -31,7 +31,7 @@ jobs:
           import hashlib, json, os, re, sys, urllib.parse, urllib.request
           mc = os.environ["MC"]
           os.makedirs("mods", exist_ok=True)
-          H = {"User-Agent": "Enchanted-mods-fetch"}
+          H = {"User-Agent": "LT6MS-mods-fetch"}
 
           def get(url):
               return urllib.request.urlopen(urllib.request.Request(url, headers=H), timeout=60)
@@ -117,7 +117,7 @@ jobs:
               TAG="mods-$MC"
               # пересоздаём релиз, чтобы старые версии не остались рядом с новыми
               gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag >/dev/null 2>&1 || true
-              gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Моды $MC" --notes "Моды для Enchanted ($MC)"
+              gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Моды $MC" --notes "Моды для LT6MS ($MC)"
               gh release upload "$TAG" mods/*.jar index.json --repo "$GITHUB_REPOSITORY" --clobber
             else
               rc=1

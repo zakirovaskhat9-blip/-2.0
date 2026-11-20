@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.lwjgl.glfw.GLFW;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -16,6 +18,7 @@ import net.minecraft.client.Options;
 
 /** Настройки клиента: модули, их параметры, клавиши, позиции HUD, сохранение в config/lt6.json. */
 public final class Cfg {
+    private static final Logger LOGGER = LoggerFactory.getLogger("LT6/Config");
 	static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("lt6.json");
 
 	// ---- темы интерфейса: основной цвет + второй цвет для градиентов ----
@@ -136,38 +139,39 @@ public final class Cfg {
 		Module apply(Runnable r) { this.apply = r; return this; }
 	}
 
-	static final String VIS = "Visuals", HUD = "HUD";
+	static final String VIS = "Visuals", HUD = "Utils", PLAYER = "Player";
 
 	// LT6 — all new visuals, no legacy modules.
-	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 0, "Nursultan Square", "Celestial Corners");
-	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Подсветка цели: Nursultan / Celestial", VIS, true, ESP_STYLE);
+	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 0, "Neon Chevrons");
+	public static final Slider ESP_TURN_SECONDS = new Slider("turn_seconds", "Оборот за", 1.2, 8.0, 0.2, 3.0, "с");
+	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Шевроны с ровным вращением вокруг тела цели", VIS, true, ESP_STYLE, ESP_TURN_SECONDS);
 
 	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
-	public static final Module SKY = new Module("sky", "Custom Sky", "Шесть новых панорам от автора", VIS, false, SKY_PRESET);
+	public static final Module SKY = new Module("sky", "Custom Sky", "Шесть небес, переключение без перезапуска", VIS, false, SKY_PRESET).apply(() -> SkyPacks.select(SKY_PRESET.idx, SKY.enabled));
 
 	public static final Module FPS = new Module("fps", "FPS Counter", "Частота кадров", HUD, true);
 
 	public static final Color HIT_TINT = new Color("color", "Цвет попадания", 1);
 	public static final Slider HIT_SIZE = new Slider("size", "Размер частиц", 0.5, 2.5, 0.1, 1.0, "x");
-	public static final Module HIT_COLOR = new Module("hit_color", "Hit Color", "Цветные частицы при ударе", VIS, true, HIT_TINT, HIT_SIZE);
+	public static final Module HIT_COLOR = new Module("hit_color", "Hit Color", "Цвет модели в момент получения урона + частицы", VIS, true, HIT_TINT, HIT_SIZE);
 
 	public static final Slider WARMTH = new Slider("warmth", "Температура цвета", -100, 100, 5, 0, "%");
-	public static final Module FILTER = new Module("filter", "Color Filter", "Тёплый/холодный фильтр", VIS, false, WARMTH);
+	public static final Module FILTER = new Module("filter", "Color Filter", "Шейдер тёплых/холодных оттенков", VIS, false, WARMTH);
 
-	public static final Slider CONTRAST_POWER = new Slider("contrast", "Контраст", -50, 50, 5, 0, "%");
-	public static final Module CONTRAST = new Module("contrast", "Contrast", "Контрастность через затемнение/подсветку", VIS, false, CONTRAST_POWER);
+	public static final Slider CONTRAST_POWER = new Slider("contrast", "Контраст", -100, 100, 5, 0, "%");
+	public static final Module CONTRAST = new Module("contrast", "Contrast", "Нужен полноценный shader для изменения насыщенности", VIS, false, CONTRAST_POWER);
 
-	public static final Slider BRIGHTNESS_LEVEL = new Slider("level", "Яркость", 0.2, 2.0, 0.1, 1.0, "x");
+	public static final Slider BRIGHTNESS_LEVEL = new Slider("level", "Яркость", 0.2, 2.4, 0.1, 1.0, "x");
 	public static final Module BRIGHTNESS = new Module("brightness", "Brightness", "Уровень гаммы", VIS, false, BRIGHTNESS_LEVEL);
 
 	public static final Color JUMP_TINT = new Color("color", "Цвет круга", 5);
 	public static final Slider JUMP_RADIUS = new Slider("radius", "Радиус", 0.6, 2.5, 0.1, 1.2, "м");
-	public static final Module JUMP_CIRCLES = new Module("jump_circles", "Jump Circles", "Кольцо частиц при прыжке и приземлении", VIS, true, JUMP_TINT, JUMP_RADIUS);
+	public static final Module JUMP_CIRCLES = new Module("jump_circles", "Jump Circles", "Цветная волна при прыжке и приземлении", PLAYER, true, JUMP_TINT, JUMP_RADIUS);
 
 	static final Slider UI_OPACITY = new Slider("opacity", "Прозрачность плашек", 30, 100, 5, 72, "%");
 	static final Slider UI_ROUND = new Slider("round", "Скругление", 0, 8, 1, 4, " px");
-	static final Bool UI_GLOW = new Bool("glow", "Тени и свечение", true);
-	static final Bool UI_PART = new Bool("particles", "Частицы в меню", true);
+	static final Bool UI_GLOW = new Bool("glow", "Тени и свечение", false);
+	static final Bool UI_PART = new Bool("particles", "Частицы в меню", false);
 	static final Bool UI_BLUR = new Bool("blur", "Размытие меню", false);
 	static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR);
 
@@ -230,7 +234,8 @@ public final class Cfg {
 	static void changed(Module m) {
 		try {
 			m.apply.run();
-		} catch (Throwable ignored) {
+		} catch (RuntimeException error) {
+            LOGGER.error("Failed to apply module settings: {}", m.id, error);
 		}
 		save();
 	}
@@ -262,7 +267,8 @@ public final class Cfg {
 					if (so.has(s.id)) s.set(so.get(s.id).getAsDouble());
 				}
 			}
-		} catch (Exception ignored) {
+		} catch (Exception error) {
+            LOGGER.warn("Cannot read LT6 configuration {}. Defaults will be used.", FILE, error);
 		}
 	}
 
@@ -282,8 +288,10 @@ public final class Cfg {
 			JsonObject so = new JsonObject();
 			for (Setting s : STYLE.settings) so.addProperty(s.id, s.get());
 			o.add("style", so);
+            Files.createDirectories(FILE.getParent());
 			Files.writeString(FILE, o.toString());
-		} catch (Exception ignored) {
+		} catch (Exception error) {
+            LOGGER.error("Could not save LT6 configuration to {}", FILE, error);
 		}
 	}
 }

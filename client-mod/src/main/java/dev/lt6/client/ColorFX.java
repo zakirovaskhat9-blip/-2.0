@@ -1,38 +1,61 @@
 package dev.lt6.client;
 
+import dev.lt6.client.mixin.LT6PostEffectBridge;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.resources.Identifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-/** Screen-level color grading preview. Disabled while Custom Sky is on to avoid tinting panoramas. */
+/** True GPU grading; no fullscreen alpha overlays and no HUD tinting. */
 public final class ColorFX {
+    private static final Logger LOGGER = LoggerFactory.getLogger("LT6/ColorFX");
+    private static Double initialGamma;
+    private static boolean failed;
+    private static Identifier ownedId;
     private ColorFX() {}
-    private static Double rememberedGamma;
+
     public static void tick(Minecraft mc) {
         try {
-            var gamma=mc.options.gamma();
-            if(Cfg.BRIGHTNESS.enabled) {
-                if(rememberedGamma==null) rememberedGamma=gamma.get();
-                double v=Cfg.BRIGHTNESS_LEVEL.v;
-                if(Math.abs(gamma.get()-v)>0.01) gamma.set(v);
-            } else if(rememberedGamma!=null) {
-                gamma.set(rememberedGamma); rememberedGamma=null;
+            var gamma = mc.options.gamma();
+            if (mc.player != null && Cfg.BRIGHTNESS.enabled) {
+                if (initialGamma == null) initialGamma = gamma.get();
+                double desired = Cfg.BRIGHTNESS_LEVEL.v;
+                if (Math.abs(gamma.get() - desired) > 0.001) gamma.set(desired);
+            } else if (initialGamma != null) {
+                gamma.set(initialGamma);
+                initialGamma = null;
             }
-        } catch(Exception ignored) { }
-    }
-    public static void render(GuiGraphics g) {
-        Minecraft mc=Minecraft.getInstance();
-        if(mc.player==null || mc.level==null || mc.options.hideGui || Cfg.SKY.enabled) return;
-        int w=mc.getWindow().getGuiScaledWidth();
-        int h=mc.getWindow().getGuiScaledHeight();
-        if(Cfg.FILTER.enabled) {
-            double v=Cfg.WARMTH.v;
-            int alpha=(int)Math.min(65,Math.abs(v)*0.55);
-            if(alpha>0) g.fill(0,0,w,h,(alpha<<24) | (v>0?0xFF9B47:0x3876F8));
+        } catch (RuntimeException e) {
+            LOGGER.debug("Gamma adjustment unavailable", e);
         }
-        if(Cfg.CONTRAST.enabled) {
-            double v=Cfg.CONTRAST_POWER.v;
-            int alpha=(int)Math.min(44,Math.abs(v)*0.65);
-            if(alpha>0) g.fill(0,0,w,h,(alpha<<24) | (v>0?0x000000:0xFFFFFF));
+
+        if (failed) return;
+        boolean wanted = mc.player != null && mc.level != null && !Cfg.SKY.enabled
+                && (Cfg.FILTER.enabled || Cfg.CONTRAST.enabled);
+        Identifier present = mc.gameRenderer.currentPostEffect();
+        boolean weOwnIt = ownedId != null && ownedId.equals(present);
+        if (!wanted) {
+            if (weOwnIt) mc.gameRenderer.clearPostEffect();
+            ownedId = null;
+            return;
+        }
+        // Do not take over another mod's or spectator's post-effect.
+        if (present != null && !weOwnIt) return;
+        int saturation = Cfg.CONTRAST.enabled
+                ? (int)Math.round((Cfg.CONTRAST_POWER.v + 100.0) / 10.0) : 10;
+        int warmth = Cfg.FILTER.enabled
+                ? (int)Math.round((Cfg.WARMTH.v + 100.0) / 20.0) : 5;
+        saturation = Math.max(0, Math.min(20, saturation));
+        warmth = Math.max(0, Math.min(10, warmth));
+        Identifier wantedId = Identifier.fromNamespaceAndPath("lt6", "grading/s" + saturation + "_w" + warmth);
+        if (wantedId.equals(present)) return;
+        try {
+            ((LT6PostEffectBridge)mc.gameRenderer).lt6$setPostEffect(wantedId);
+            ownedId = wantedId;
+        } catch (Throwable error) {
+            failed = true;
+            ownedId = null;
+            LOGGER.error("GPU grading could not be enabled; disabling post-effect for this session", error);
         }
     }
 }

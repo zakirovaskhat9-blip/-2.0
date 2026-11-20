@@ -5,8 +5,8 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "SkinMixin",
-    "ProbeMixin",
-    "SkyBodiesMixin"
+    "HitColorMixin",
+    "LT6PostEffectBridge"
   ],
   "injectors": {
     "defaultRequire": 0

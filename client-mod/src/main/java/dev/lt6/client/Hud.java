@@ -6,159 +6,225 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
 
 /**
- * Target ESP: вращающийся ромб на цели боя (как в Nursultan). Два вида: «Ромб» (замкнутый контур) и «Скобки» (уголки).
- * Рисуется поворотом матрицы GUI и несколькими fill-прямоугольниками (около 20 вызовов за кадр вместо сотен пикселей).
- * Сквозь стены не светит. Проекция считается без аллокаций.
+ * LT6 Target ESP: four neon-green chevrons orbit the torso at constant angular velocity,
+ * without a center dot. The orbit stays circular in GUI pixels regardless of aspect ratio.
+ *
+ * The marker follows the interpolated WORLD position of the target's torso. Its
+ * size is derived from the projected HEIGHT of that entity (not from a constant
+ * number of screen pixels), so it gets smaller as the entity moves away.
+ * No smoothing is applied to the projected position: delayed smoothing makes
+ * a screen-space overlay visibly lag behind a moving player or camera.
  */
 public final class Hud {
-	private static final long HOLD = 4000L, FADE_IN = 320L, FADE_OUT = 350L;
-	private static final double SQ = 0.70710678;
-	private static LivingEntity target;
-	private static long since, until;
+    private static final long HOLD_MS = 4000L;
+    private static final long FADE_IN_MS = 150L;
+    private static final long FADE_OUT_MS = 260L;
+    // A continuous, monotonic time-based rotation. Changing the speed slider must not
+    // make the arrows snap to a new angle. Keeping a phase origin achieves that.
+    private static final double TWO_PI = Math.PI * 2.0;
+    private static long angleOriginNs = System.nanoTime();
+    private static double angleOriginRadians = 0.0;
+    private static double activeTurnSeconds = 3.0;
+    private static LivingEntity target;
+    private static long acquiredAt, expiresAt;
 
-	// базис камеры (считается один раз за кадр) и результат проекции
-	private static double camX, camY, camZ, fx, fy, fz, rx, rz, ux, uy, uz, tanH, aspect, sx, sy;
-	private static int scrW, scrH;
+    // Camera basis calculated once per frame.
+    private static double camX, camY, camZ;
+    private static double forwardX, forwardY, forwardZ;
+    private static double rightX, rightZ;
+    private static double upX, upY, upZ;
+    private static double halfFovTan, aspect;
+    private static int screenW, screenH;
+    private static double projectedX, projectedY;
 
-	static void hit(Entity e) {
-		if (!(e instanceof LivingEntity le)) return;
-		long now = System.currentTimeMillis();
-		if (le != target || now > until) since = now; // новая цель - ромб «выпрыгивает» заново
-		target = le;
-		until = now + HOLD;
-	}
+    private Hud() { }
 
-	public static void render(GuiGraphics g, DeltaTracker dt) {
-		LivingEntity t = target;
-		if (t == null) return; // дёшево выходим, пока цели нет
-		Minecraft mc = Minecraft.getInstance();
-		if (!Cfg.TARGET_ESP.enabled || mc.player == null || mc.level == null || mc.options.hideGui) return;
-		long now = System.currentTimeMillis();
-		if (now > until || !t.isAlive() || t.isRemoved() || t == mc.player) {
-			if (now > until) target = null;
-			return;
-		}
-		Gfx.alphaMul = 1f;
+    static void hit(Entity e) {
+        if (!(e instanceof LivingEntity living) || !living.isAlive()) return;
+        long now = System.currentTimeMillis();
+        if (living != target || now >= expiresAt) acquiredAt = now;
+        target = living;
+        expiresAt = now + HOLD_MS;
+    }
 
-		Camera cam = mc.gameRenderer.getMainCamera();
-		if (cam == null || !cam.isInitialized()) return;
-		float pt = dt.getGameTimeDeltaPartialTick(false);
-		scrW = mc.getWindow().getGuiScaledWidth();
-		scrH = mc.getWindow().getGuiScaledHeight();
-		prepare(cam, mc.options.fov().get());
+    public static void render(GuiGraphics graphics, DeltaTracker delta) {
+        Minecraft minecraft = Minecraft.getInstance();
+        // A visible entity under the crosshair is also a valid target.
+        // Attacks keep that same target highlighted briefly after looking away.
+        if (minecraft.hitResult instanceof EntityHitResult hitResult
+                && hitResult.getEntity() instanceof LivingEntity hovered
+                && hovered != minecraft.player) {
+            hit(hovered);
+        }
+        LivingEntity current = target;
+        if (current == null || !Cfg.TARGET_ESP.enabled || minecraft.level == null
+                || minecraft.player == null || minecraft.options.hideGui) return;
 
-		double ox = (t.xo - t.getX()) * (1.0 - pt), oy = (t.yo - t.getY()) * (1.0 - pt), oz = (t.zo - t.getZ()) * (1.0 - pt);
-		AABB b = t.getBoundingBox().move(ox, oy, oz);
+        long now = System.currentTimeMillis();
+        if (now >= expiresAt || current.isRemoved() || !current.isAlive()
+                || current.level() != minecraft.level || current == minecraft.player) {
+            target = null;
+            return;
+        }
 
-		double x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-		for (int i = 0; i < 8; i++) {
-			if (!project((i & 1) == 0 ? b.minX : b.maxX, (i & 2) == 0 ? b.minY : b.maxY, (i & 4) == 0 ? b.minZ : b.maxZ)) return; // цель частично позади камеры
-			if (sx < x0) x0 = sx;
-			if (sx > x1) x1 = sx;
-			if (sy < y0) y0 = sy;
-			if (sy > y1) y1 = sy;
-		}
-		if (x1 - x0 > scrW * 2 || y1 - y0 > scrH * 2) return;
-		double cx = (x0 + x1) / 2.0, cy = (y0 + y1) / 2.0;
-		if (cx < -60 || cy < -60 || cx > scrW + 60 || cy > scrH + 60) return; // вне экрана - не рисуем
+        Camera camera = minecraft.gameRenderer.getMainCamera();
+        if (camera == null || !camera.isInitialized()) return;
+        screenW = minecraft.getWindow().getGuiScaledWidth();
+        screenH = minecraft.getWindow().getGuiScaledHeight();
+        if (screenW <= 0 || screenH <= 0) return;
+        prepare(camera, minecraft.options.fov().get());
 
-		// появление (с «отскоком») и затухание перед концом; при ударе по цели - красная вспышка
-		float in = Gfx.easeOutBack((now - since) / (float) FADE_IN);
-		float alpha = Gfx.clamp01((now - since) / 200f) * Gfx.clamp01((until - now) / (float) FADE_OUT);
-		if (alpha <= 0.01f) return;
-		float flash = Math.min(1f, t.hurtTime / 8f);
-		int c0 = Gfx.mix(Cfg.accent(), 0xFFFF3B3B, flash), c1 = Gfx.mix(Cfg.accent2(), 0xFFFF6A3B, flash);
-		float pulse = (0.8f + 0.2f * (float) Math.sin(now / 190.0)) * alpha;
-		double r = Math.max(10, Math.min(44, (y1 - y0) * 0.3)) * in;
-		if (r < 2) return;
+        // Interpolate between game ticks. This also follows walking, sprinting,
+        // jumping and knockback while the target and the camera are moving.
+        float partialTick = delta.getGameTimeDeltaPartialTick(false);
+        double x = lerp(partialTick, current.xo, current.getX());
+        double y = lerp(partialTick, current.yo, current.getY());
+        double z = lerp(partialTick, current.zo, current.getZ());
+        double height = current.getBbHeight();
+        if (height <= 0) return;
 
-		var pose = g.pose();
-		pose.pushMatrix();
-		pose.translate((float) cx, (float) cy);
-		if (Cfg.ESP_STYLE.idx == 1) {
-			pose.rotate((float) (now / 1100.0));
-			brackets(g, (int) Math.round(r * SQ), c0, c1, pulse);
-		} else {
-			pose.rotate((float) (now / 700.0));
-			diamond(g, (int) Math.round(r * SQ), c0, c1, pulse);
-		}
-		pose.popMatrix();
-	}
+        // Torso center rather than the head, feet, crosshair or a fixed GUI spot.
+        if (!project(x, y + height * 0.55, z)) return;
+        double centerX = projectedX;
+        double centerY = projectedY;
+        if (centerX < -64 || centerX > screenW + 64
+                || centerY < -64 || centerY > screenH + 64) return;
 
-	// ---------------- виды ----------------
+        // Derive size directly from the target's world-space height and camera depth.
+        // Projecting the feet and head separately made the radius wobble while looking
+        // up/down. This stays proportional to the visible player's apparent size.
+        double dx = x - camX;
+        double dy = y + height * 0.55 - camY;
+        double dz = z - camZ;
+        double depth = dx * forwardX + dy * forwardY + dz * forwardZ;
+        if (depth <= 0.05) return;
+        double projectedHeight = height * screenH / (2.0 * depth * halfFovTan);
+        if (!Double.isFinite(projectedHeight)) return;
+        double radius = projectedHeight * 0.145;
+        if (radius < 1.5) return; // Do not inflate distant targets.
 
-	/** Вид 1: замкнутый контур + мягкое свечение + лёгкая заливка + точка в центре. */
-	private static void diamond(GuiGraphics g, int h, int c0, int c1, float pulse) {
-		for (int k = 3; k >= 1; k--) { // свечение: увеличенные бледные контуры
-			frame(g, h + k * 2, 1, Gfx.a(c0, 0.16f * pulse / k), Gfx.a(c1, 0.16f * pulse / k));
-		}
-		g.fillGradient(-h, -h, h, h, Gfx.a(c0, 0.20f * pulse), Gfx.a(c1, 0.20f * pulse));
-		frame(g, h, 1, Gfx.a(c0, pulse), Gfx.a(c1, pulse));
-		frame(g, h - 1, 1, Gfx.a(c0, 0.55f * pulse), Gfx.a(c1, 0.55f * pulse));
-		g.fill(-1, -1, 2, 2, Gfx.a(c1, pulse));
-	}
+        float fadeIn = clamp01((now - acquiredAt) / (float) FADE_IN_MS);
+        float fadeOut = clamp01((expiresAt - now) / (float) FADE_OUT_MS);
+        float opacity = fadeIn * fadeOut;
+        if (opacity <= 0.01f) return;
 
-	/** Контур квадрата со стороной 2h: верх и низ - цвета c0 и c1, бока - вертикальный градиент. */
-	private static void frame(GuiGraphics g, int h, int t, int c0, int c1) {
-		g.fill(-h, -h, h, -h + t, c0);
-		g.fill(-h, h - t, h, h, c1);
-		g.fillGradient(-h, -h + t, -h + t, h - t, c0, c1);
-		g.fillGradient(h - t, -h + t, h, h - t, c0, c1);
-	}
+        // True constant-speed rotation: no easing, pulsing or tick-based angle steps.
+        // The four chevrons retain identical angular spacing throughout the orbit.
+        Gfx.alphaMul = 1f;
+        float angle = continuousAngle(System.nanoTime(), Cfg.ESP_TURN_SECONDS.v);
+        drawMarker(graphics, centerX, centerY, radius, opacity, angle);
+    }
 
-	/** Вид 2: четыре уголка (как в Nursultan) со свечением; цвет плавно идёт от c0 к c1 по кругу. */
-	private static void brackets(GuiGraphics g, int h, int c0, int c1, float pulse) {
-		int len = Math.max(4, Math.round(h * 0.55f));
-		for (int layer = 2; layer >= 0; layer--) {
-			int th = 2 + layer * 2; // слой 0 - сама линия, 1 и 2 - свечение
-			float al = layer == 0 ? 1f : layer == 1 ? 0.22f : 0.10f;
-			for (int k = 0; k < 4; k++) {
-				int sxk = (k & 1) == 0 ? -1 : 1, syk = (k & 2) == 0 ? -1 : 1;
-				int col = Gfx.a(Gfx.mix(c0, c1, Gfx.tri(k / 4f + 0.25f)), al * pulse);
-				int cx0 = sxk * h, cy0 = syk * h, e = (th - 2) / 2;
-				// горизонтальная и вертикальная «ножки» уголка
-				arm(g, cx0 + sxk * e, cy0 + syk * e, cx0 - sxk * (len + e), cy0 - syk * (th - e), col);
-				arm(g, cx0 + sxk * e, cy0 + syk * e, cx0 - sxk * (th - e), cy0 - syk * (len + e), col);
-			}
-		}
-	}
+    /**
+     * Continuous angular velocity in real time. A slider change preserves the
+     * current phase, instead of visibly teleporting the arrows to a new position.
+     * Screen refresh rate does not affect the number of revolutions per second.
+     */
+    private static float continuousAngle(long nowNs, double turnSeconds) {
+        double seconds = Math.max(0.5, turnSeconds);
+        if (Math.abs(seconds - activeTurnSeconds) > 0.00001) {
+            angleOriginRadians = angleOriginRadians
+                    + (nowNs - angleOriginNs) * 1e-9 * (TWO_PI / activeTurnSeconds);
+            angleOriginRadians %= TWO_PI;
+            angleOriginNs = nowNs;
+            activeTurnSeconds = seconds;
+        }
+        double angle = angleOriginRadians
+                + (nowNs - angleOriginNs) * 1e-9 * (TWO_PI / activeTurnSeconds);
+        return (float) (angle % TWO_PI);
+    }
 
-	private static void arm(GuiGraphics g, int xa, int ya, int xb, int yb, int c) {
-		g.fill(Math.min(xa, xb), Math.min(ya, yb), Math.max(xa, xb), Math.max(ya, yb), c);
-	}
+    private static double lerp(double t, double a, double b) {
+        return a + (b - a) * t;
+    }
 
-	// ---------------- проекция без аллокаций ----------------
+    private static float clamp01(float value) {
+        return Math.max(0f, Math.min(1f, value));
+    }
 
-	private static void prepare(Camera cam, double fovDeg) {
-		camX = cam.position().x;
-		camY = cam.position().y;
-		camZ = cam.position().z;
-		double yaw = Math.toRadians(cam.yRot()), pitch = Math.toRadians(cam.xRot());
-		double cp = Math.cos(pitch), sy0 = Math.sin(yaw), cy0 = Math.cos(yaw);
-		fx = -sy0 * cp;
-		fy = -Math.sin(pitch);
-		fz = cy0 * cp;
-		rx = -cy0;
-		rz = -sy0;
-		ux = -rz * fy;
-		uy = rz * fx - rx * fz;
-		uz = rx * fy;
-		tanH = Math.tan(Math.toRadians(fovDeg) / 2.0);
-		aspect = (double) scrW / scrH;
-	}
+    /** Draw four ∧, ∨, < and > symbols pointing OUTWARDS, as in the reference. */
+    private static void drawMarker(GuiGraphics g, double cx, double cy, double radius, float opacity, float angle) {
+        // A local coordinate system keeps thickness, spacing and glow in scale
+        // with the target. Scale is never clamped to a minimum screen size.
+        float scale = (float) (radius / 40.0);
+        var pose = g.pose();
+        pose.pushMatrix();
+        pose.translate((float) cx, (float) cy);
+        pose.rotate(angle); // rotate the four chevrons as one, around the exact target-body anchor
+        pose.scale(scale, scale);
 
-	/** Экранные координаты точки мира (GUI-пиксели) в sx/sy; false, если точка позади камеры. */
-	private static boolean project(double wx, double wy, double wz) {
-		double dx = wx - camX, dy = wy - camY, dz = wz - camZ;
-		double depth = dx * fx + dy * fy + dz * fz;
-		if (depth < 0.05) return false;
-		double nx = (dx * rx + dz * rz) / (depth * tanH * aspect);
-		double ny = (dx * ux + dy * uy + dz * uz) / (depth * tanH);
-		sx = (nx * 0.5 + 0.5) * scrW;
-		sy = (0.5 - ny * 0.5) * scrH;
-		return true;
-	}
+        // Bloom is intentionally understated so arrow shapes remain crisp.
+        for (int glow = 2; glow >= 1; glow--) {
+            int color = Gfx.a(0xFF39FF14, opacity * (glow == 1 ? 0.20f : 0.08f));
+            chevrons(g, 4 + glow * 5, color);
+        }
+        chevrons(g, 4, Gfx.a(0xFF39FF14, opacity));
+        pose.popMatrix();
+    }
+
+    private static void chevrons(GuiGraphics g, int width, int color) {
+        // Top: ^
+        stroke(g, -12, -28, 0, -40, width, color);
+        stroke(g, 0, -40, 12, -28, width, color);
+        // Right: >
+        stroke(g, 28, -12, 40, 0, width, color);
+        stroke(g, 40, 0, 28, 12, width, color);
+        // Bottom: v
+        stroke(g, -12, 28, 0, 40, width, color);
+        stroke(g, 0, 40, 12, 28, width, color);
+        // Left: <
+        stroke(g, -28, -12, -40, 0, width, color);
+        stroke(g, -40, 0, -28, 12, width, color);
+    }
+
+    /** Rotate a filled rectangle to produce a diagonal, solid line segment. */
+    private static void stroke(GuiGraphics g, int x0, int y0, int x1, int y1, int width, int color) {
+        double dx = x1 - x0;
+        double dy = y1 - y0;
+        int length = (int) Math.round(Math.hypot(dx, dy));
+        if (length == 0) return;
+        var pose = g.pose();
+        pose.pushMatrix();
+        pose.translate(x0, y0);
+        pose.rotate((float) Math.atan2(dy, dx));
+        g.fill(0, -width / 2, length, (width + 1) / 2, color);
+        pose.popMatrix();
+    }
+
+    private static void prepare(Camera camera, double fovDegrees) {
+        camX = camera.position().x;
+        camY = camera.position().y;
+        camZ = camera.position().z;
+        double yaw = Math.toRadians(camera.yRot());
+        double pitch = Math.toRadians(camera.xRot());
+        double cosPitch = Math.cos(pitch);
+        double sinYaw = Math.sin(yaw);
+        double cosYaw = Math.cos(yaw);
+        forwardX = -sinYaw * cosPitch;
+        forwardY = -Math.sin(pitch);
+        forwardZ = cosYaw * cosPitch;
+        rightX = -cosYaw;
+        rightZ = -sinYaw;
+        upX = -rightZ * forwardY;
+        upY = rightZ * forwardX - rightX * forwardZ;
+        upZ = rightX * forwardY;
+        halfFovTan = Math.tan(Math.toRadians(fovDegrees) / 2.0);
+        aspect = (double) screenW / screenH;
+    }
+
+    private static boolean project(double wx, double wy, double wz) {
+        double dx = wx - camX;
+        double dy = wy - camY;
+        double dz = wz - camZ;
+        double depth = dx * forwardX + dy * forwardY + dz * forwardZ;
+        if (depth <= 0.05) return false;
+        double normalizedX = (dx * rightX + dz * rightZ) / (depth * halfFovTan * aspect);
+        double normalizedY = (dx * upX + dy * upY + dz * upZ) / (depth * halfFovTan);
+        projectedX = (normalizedX * 0.5 + 0.5) * screenW;
+        projectedY = (0.5 - normalizedY * 0.5) * screenH;
+        return Double.isFinite(projectedX) && Double.isFinite(projectedY);
+    }
 }

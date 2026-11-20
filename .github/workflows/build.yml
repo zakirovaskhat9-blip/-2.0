@@ -1,4 +1,4 @@
-name: Build Enchanted.exe
+name: Build LT6MS Launcher
 
 on:
   push:
@@ -15,21 +15,90 @@ jobs:
           distribution: temurin
           java-version: "25"
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.8.2"
+
+      # GitHub's web upload overwrites files but does not delete old images.
+      # Purge obsolete panorama textures on the runner so they are never packed into LT6.
+      # GitHub web uploads do not delete removed files. Old Enchanted client must
+      # never get into LT6.jar, even if an older commit still has those sources.
+      - name: Удалить старый визуальный мод Enchanted
+        shell: pwsh
+        run: |
+          $oldPaths = @(
+            'client-mod/src/main/java/dev/enchanted',
+            'client-mod/src/main/resources/assets/enchanted_client',
+            'client-mod/src/main/resources/enchanted-client.mixins.json'
+          )
+          foreach ($item in $oldPaths) {
+            if (Test-Path -LiteralPath $item) { Remove-Item -LiteralPath $item -Recurse -Force }
+          }
+          if (-not (Test-Path -LiteralPath 'client-mod/src/main/java/dev/lt6/client/LT6Client.java')) {
+            throw 'New LT6 entrypoint is missing: upload files from this ZIP into repo root.'
+          }
+          if (-not (Test-Path -LiteralPath 'client-mod/src/main/resources/lt6.mixins.json')) {
+            throw 'New LT6 mixin config is missing; incomplete GitHub upload.'
+          }
+
+      - name: Проверить новые наборы неба
+        shell: pwsh
+        run: |
+          $packs = @(Get-ChildItem 'Enchanted/sky_packs' -Filter 'LT6_*.zip' -File)
+          if ($packs.Count -ne 6) { throw "Expected 6 user sky resource packs, found $($packs.Count)" }
+          Write-Host "Six Custom Sky resource packs found."
+
+      - name: Проверить исходники и шейдеры LT6
+        shell: pwsh
+        run: |
+          python tools/validate_lt6.py
+
+      - name: Проверить готовность релиза LT6
+        shell: pwsh
+        run: |
+          python tools/check_lt6_release.py
 
       - name: Собрать клиентский мод
         shell: pwsh
         working-directory: client-mod
         run: |
-          gradle build --no-daemon
-          New-Item -ItemType Directory -Force -Path ../Enchanted/client_mod | Out-Null
-          Get-ChildItem build/libs/enchanted-client-*.jar | Where-Object { $_.Name -notmatch 'sources|dev' } | Select-Object -First 1 | Copy-Item -Destination ../Enchanted/client_mod/enchanted-client.jar
+          $ErrorActionPreference = 'Stop'
+          gradle clean build --no-daemon
+          if ($LASTEXITCODE -ne 0) { throw "Gradle failed (exit code $LASTEXITCODE)" }
 
-      - uses: actions/setup-python@v5
+          $jar = Get-ChildItem -Path 'build/libs' -Filter 'lt6-*.jar' -File |
+            Where-Object { $_.Name -notmatch '(?i)(sources|dev|javadoc)' } |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if ($null -eq $jar) { throw 'LT6 JAR not found in client-mod/build/libs' }
+          # A filename alone does not prove that the game can load the mod.
+          $entries = & jar tf $jar.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'LT6 JAR is not a readable Java archive' }
+          if ('fabric.mod.json' -notin $entries -or 'dev/lt6/client/LT6Client.class' -notin $entries -or 'lt6.mixins.json' -notin $entries) {
+            throw 'LT6 JAR does not contain the Fabric manifest and LT6Client entrypoint'
+          }
+
+          if (@($entries | Where-Object { $_ -like 'dev/enchanted/client/*' }).Count -ne 0) {
+            throw 'Legacy Enchanted visual classes were unexpectedly packed into LT6.jar'
+          }
+
+          New-Item -ItemType Directory -Force -Path '../Enchanted/client_mod' | Out-Null
+          Copy-Item -LiteralPath $jar.FullName -Destination '../Enchanted/client_mod/lt6.jar' -Force
+          if (-not (Test-Path -LiteralPath '../Enchanted/client_mod/lt6.jar')) {
+            throw 'LT6 JAR was not copied into the launcher resources'
+          }
+          Write-Host "Embedded LT6 mod: $($jar.Name)"
+          Get-Item -LiteralPath ../Enchanted/client_mod/lt6.jar | Format-List FullName,Length
+
+      - name: Сохранить LT6 JAR для диагностики
+        uses: actions/upload-artifact@v4
         with:
-          python-version: "3.12"
+          name: LT6-Mod-JAR
+          path: Enchanted/client_mod/lt6.jar
+          if-no-files-found: error
 
       - name: Иконка
         run: |
@@ -42,7 +111,16 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Собрать лаунчер
-        run: dotnet publish Enchanted/Enchanted.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath 'Enchanted/client_mod/lt6.jar')) {
+            throw 'LT6 jar is missing before dotnet publish; check Gradle and JAR copy steps'
+          }
+          dotnet publish Enchanted/Enchanted.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit code $LASTEXITCODE)" }
+          if (-not (Test-Path -LiteralPath 'publish/LT6MS Launcher.exe')) {
+            throw 'Launcher EXE was not produced under the expected name'
+          }
 
      
       - name: Загрузить LT6MS Launcher

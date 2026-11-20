@@ -20,19 +20,19 @@ public final class LT6Client implements ClientModInitializer {
         Skins.init();
         Cfg.load();
         LT6Keys.register();
-        HudElementRegistry.addFirst(Identifier.fromNamespaceAndPath("lt6", "color_grading"),
-            (gui, dt) -> ColorFX.render(gui));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("lt6", "hud"), (gui, dt) -> {
             Overlay.render(gui, dt);
             Hud.render(gui, dt);
         });
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             LT6Keys.poll(mc);
+            // ColorFX also resets gamma/post-effects when leaving a world.
+            ColorFX.tick(mc);
             if (mc.player == null || mc.level == null) return;
             Binds.poll(mc);
             JumpFX.tick(mc);
-            ColorFX.tick(mc);
             SkyOptions.tick(mc);
+            SkyPacks.tick(mc);
         });
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
             if (world.isClientSide() && player == Minecraft.getInstance().player) {

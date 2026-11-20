@@ -22,7 +22,7 @@ import net.minecraft.network.chat.Component;
  */
 public class LT6Screen extends Screen {
 	private static final int W = 580, H = 352, SIDE = 126;
-	private static final String[] TABS = {"Visuals", "HUD", "Тема"};
+	private static final String[] TABS = {"Visuals", "Utils", "Player", "Theme"};
 	private static final int WHITE = 0xFFFFFFFF, GRAY = 0xFF9A9A9A, DIM = 0xFF6A6A72;
 	private static final int CARD = 0xFF16161C, ROW = 0xFF13131A, SIDEBG = 0xAA101016;
 
@@ -54,7 +54,7 @@ public class LT6Screen extends Screen {
 
 	@Override
 	protected void init() {
-		// Панорамы LT6 входят в jar; старых файлов из skies не читаем.
+		// Custom Sky packs are installed by the launcher; select one in Minecraft resource packs.
 		Cfg.SKY_PRESET.opts = SkyLib.names();
 		if (Cfg.SKY_PRESET.idx >= Cfg.SKY_PRESET.opts.length) Cfg.SKY_PRESET.idx = 0;
 		resetScroll();
@@ -140,7 +140,7 @@ public class LT6Screen extends Screen {
 		clipY1 = listY1;
 		int h;
 		if (open != null) h = renderSettings(g, mx, my, cx, listY0, cw, sc, open, open.settings, true, ac, ac2);
-		else if (!query.isEmpty() || tab != 2) h = renderCards(g, mx, my, cx, listY0, cw, sc, ac, ac2);
+		else if (!query.isEmpty() || tab != 3) h = renderCards(g, mx, my, cx, listY0, cw, sc, ac, ac2);
 		else h = renderThemes(g, mx, my, cx, listY0, cw, sc, ac, ac2);
 		contentH = h;
 		g.disableScissor();
@@ -179,8 +179,7 @@ public class LT6Screen extends Screen {
 			float sv = Gfx.anim(TABS[i], "tabon").to(tab == i ? 1f : 0f, 14f);
 			if (hv > 0.02f && tab != i) Gfx.rr(g, tx, ty, tw, 22, 6, Gfx.alpha(0xFFFFFF, (int) (14 * hv)));
 			int tc = Gfx.mix(GRAY, WHITE, Math.max(hv * 0.7f, sv));
-			icon(g, i, tx + 10, ty + 5, tc);
-			Gfx.str(g, f, TABS[i], tx + 28, ty + 7, tc);
+			Gfx.str(g, f, TABS[i], tx + 15, ty + 7, tc);
 			final int idx = i;
 			hit(tx, ty, tw, 22, () -> {
 				tab = idx;
@@ -216,8 +215,8 @@ public class LT6Screen extends Screen {
 	// ---------- заголовки ----------
 
 	private void headerList(GuiGraphics g, Font f, int cx, int cw, int hy, long now, int ac) {
-		String title = !query.isEmpty() ? "Поиск" : tab == 2 ? "Тема" : TABS[tab];
-		Gfx.strS(g, f, title, cx, hy - 1, WHITE, 1.3f);
+		String title = !query.isEmpty() ? "Поиск" : tab == 3 ? "Theme" : TABS[tab];
+		Gfx.str(g, f, title, cx, hy + 1, WHITE);
 
 		int sbw = 180, sbx = cx + cw - sbw, sby = hy - 3;
 		float fa = Gfx.anim("search").to(searchFocus ? 1f : 0f, 14f);
@@ -238,7 +237,7 @@ public class LT6Screen extends Screen {
 
 	private void headerSettings(GuiGraphics g, Font f, int mx, int my, int cx, int cw, int hy, int ac) {
 		Cfg.Module m = open;
-		Gfx.strS(g, f, m.name, cx, hy - 1, WHITE, 1.3f);
+		Gfx.str(g, f, m.name, cx, hy + 1, WHITE);
 		int bx = cx + cw - 62;
 		button(g, f, mx, my, bx, hy - 4, 62, 18, "< Назад", "back", () -> {
 			open = null;
@@ -276,7 +275,7 @@ public class LT6Screen extends Screen {
 		visQuery = query;
 		List<Cfg.Module> out = new ArrayList<>();
 		String q = query.trim().toLowerCase(Locale.ROOT);
-		String cat = tab == 0 ? Cfg.VIS : Cfg.HUD;
+		String cat = tab == 0 ? Cfg.VIS : tab == 1 ? Cfg.HUD : Cfg.PLAYER;
 		for (Cfg.Module m : Cfg.ALL) {
 			boolean ok = q.isEmpty()
 					? m.cat.equals(cat)
@@ -343,9 +342,9 @@ public class LT6Screen extends Screen {
 
 	private void sliderTrack(GuiGraphics g, Cfg.Slider sl, int tx, int ty, int tw, int c0, int c1) {
 		float fr = Gfx.clamp01((float) ((sl.v - sl.min) / (sl.max - sl.min)));
-		Gfx.rr(g, tx, ty, tw, 4, 2, 0xFF2A2A33);
-		Gfx.hgrad(g, tx, ty, Math.max(4, (int) (tw * fr)), 4, c0, c1);
-		Gfx.rr(g, tx + (int) ((tw - 8) * fr), ty - 3, 8, 10, 4, WHITE);
+		Gfx.rr(g, tx, ty, tw, 2, 1, 0xFF2A2A33);
+		Gfx.hgrad(g, tx, ty, Math.max(2, (int) (tw * fr)), 2, c0, c1);
+		Gfx.rr(g, tx + (int) ((tw - 5) * fr), ty - 2, 5, 6, 2, WHITE);
 	}
 
 	private void startDrag(Cfg.Slider sl, Cfg.Module m, int tx, int tw) {
@@ -402,9 +401,9 @@ public class LT6Screen extends Screen {
 					Cfg.changed(m);
 				});
 			} else if (s instanceof Cfg.Slider sl) {
-				int vw = 44, tx = ctrlX, tw = ctrlW - vw - 8;
+				int vw = 52, tx = ctrlX, tw = Math.min(156, ctrlW - vw - 8);
 				sliderTrack(g, sl, tx, y + 12, tw, ac, ac2);
-				Gfx.str(g, f, Math.round(sl.v) + sl.unit, tx + tw + 8, y + 10, GRAY);
+				Gfx.str(g, f, (sl.step < 1 ? String.format(Locale.ROOT, "%.1f", sl.v) : String.valueOf(Math.round(sl.v))) + sl.unit, tx + tw + 8, y + 10, GRAY);
 				hit(tx - 4, y + 2, tw + 8, 24, () -> startDrag(sl, m, tx, tw));
 			} else if (s instanceof Cfg.Color col) {
 				colorRow(g, f, m, col, cx, cw, ctrlX, ctrlW, y, ac);

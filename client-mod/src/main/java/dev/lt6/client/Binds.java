@@ -4,13 +4,13 @@ import org.lwjgl.glfw.GLFW;
 
 import net.minecraft.client.Minecraft;
 
-/** Клавиши модулей: опрашиваем GLFW напрямую раз в тик (пока открыт чат или меню - не срабатывают). */
+/** Клавиши модулей: используем окно Minecraft вместо текущего OpenGL-контекста (пока открыт чат или меню - не срабатывают). */
 final class Binds {
 	private Binds() {
 	}
 
 	static void poll(Minecraft mc) {
-		long win = GLFW.glfwGetCurrentContext();
+		long win = mc.getWindow().getWindow();
 		if (win == 0L) return;
 		boolean free = mc.screen == null;
 		for (Cfg.Module m : Cfg.ALL) {
