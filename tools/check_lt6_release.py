@@ -1,0 +1,86 @@
+"""LT6 release gate: check release inputs before Gradle and Win64 publishing.
+
+This is intentionally not a replacement for Gradle compilation or in-game smoke tests.
+Designed to catch common regressions that previously caused green workflows with
+missing JARs or incorrectly bundled resource packs.
+"""
+from pathlib import Path
+from zipfile import ZipFile
+import json
+import re
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+JAVA = ROOT / 'client-mod/src/main/java/dev/lt6/client'
+RES = ROOT / 'client-mod/src/main/resources'
+SHADERS = RES / 'assets/lt6/post_effect/grading'
+PACKS = ROOT / 'Enchanted/sky_packs'
+WORKFLOW = (ROOT / '.github/workflows/build.yml').read_text(encoding='utf-8')
+CS_PROJ = (ROOT / 'Enchanted/Enchanted.csproj').read_text(encoding='utf-8')
+
+def check(condition, message):
+    if not condition:
+        raise AssertionError(message)
+
+manifest = json.loads((RES / 'fabric.mod.json').read_text(encoding='utf-8'))
+check(manifest['id'] == 'lt6', 'Fabric module ID must be lt6')
+check(manifest['entrypoints'].get('client') == ['dev.lt6.client.LT6Client'], 'Missing LT6 client initializer')
+check(manifest['environment'] == 'client', 'This LT6 build must be client-only')
+check(manifest['depends'].get('minecraft') == '~1.21.11', 'Wrong Minecraft version')
+check((JAVA / 'LT6Client.java').is_file(), 'LT6 client initializer source not found')
+check('GLFW_KEY_RIGHT_SHIFT' in (JAVA/'LT6Keys.java').read_text(encoding='utf-8'), 'Right Shift default missing')
+check('ClientTickEvents.END_CLIENT_TICK' in (JAVA/'LT6Client.java').read_text(encoding='utf-8'), 'Client tick hook missing')
+
+mix = json.loads((RES / 'lt6.mixins.json').read_text(encoding='utf-8'))
+check(mix['package'] == 'dev.lt6.client.mixin', 'Mixin package mismatch')
+for name in mix['client']:
+    check((JAVA / 'mixin' / (name + '.java')).exists(), f'Mixin source missing: {name}')
+
+check(not (ROOT/'client-mod/src/main/java/dev/enchanted').exists(), 'Obsolete visual Java package remains')
+check(not (RES/'assets/enchanted_client').exists(), 'Obsolete visual assets remain')
+check('enchanted-client-*.jar' not in WORKFLOW, 'Workflow still uses old visual module name')
+check('lt6-*.jar' in WORKFLOW, 'Workflow does not capture new LT6 JAR')
+check('if-no-files-found: error' in WORKFLOW, 'Release artifacts could go missing silently')
+check('client_mod/lt6.jar' in CS_PROJ, 'Launcher does not embed LT6 JAR')
+check('sky_packs/*.zip' in CS_PROJ, 'Launcher does not embed sky packs')
+check('upload-artifact@v4' in WORKFLOW, 'Workflow does not upload release artifacts')
+check('LT6-Mod-JAR' in WORKFLOW and 'LT6MS-Launcher' in WORKFLOW, 'Missing artifacts')
+
+post = (RES/'assets/lt6/shaders/post/grading.fsh').read_text(encoding='utf-8')
+for required in ('#version 330', 'InSampler', 'DepthSampler', 'GradingConfig', 'fragColor'):
+    check(required in post, f'Missing shader input: {required}')
+check('GL_ARB_separate_shader_objects : require' not in post, 'Unsupported mandatory GLSL extension')
+profiles = sorted(SHADERS.glob('s*_w*.json'))
+check(len(profiles) == 21*11, 'Expected 231 gradient profiles')
+for item in profiles:
+    data = json.loads(item.read_text(encoding='utf-8'))
+    check(data['targets'] == {'swap': {}}, f'Bad targets: {item.name}')
+    check(len(data['passes']) == 2, f'Bad shader pass count: {item.name}')
+    first, last = data['passes']
+    check(first['vertex_shader'] == 'minecraft:core/screenquad', f'Bad vertex shader: {item.name}')
+    check(first['fragment_shader'] == 'lt6:post/grading', f'Bad fragment shader: {item.name}')
+    check(last['vertex_shader'] == 'minecraft:core/screenquad', f'Bad blit vertex shader: {item.name}')
+    check(last['output'] == 'minecraft:main', f'Bad final output: {item.name}')
+    check(any(x.get('use_depth_buffer') for x in first['inputs']), f'No depth protection: {item.name}')
+    vals = first['uniforms']['GradingConfig'][0]['value']
+    check(len(vals) == 4 and all(isinstance(v, (int, float)) for v in vals), f'Bad GLSL uniform: {item.name}')
+
+packs = sorted(PACKS.glob('LT6_*.zip'))
+check(len(packs) == 6, 'Expected six new Custom Sky packs')
+for pack in packs:
+    with ZipFile(pack) as z:
+        check(z.testzip() is None, f'Corrupt sky ZIP: {pack.name}')
+        for needed in ('pack.mcmeta', 'assets/minecraft/optifine/sky/world0/sky1.properties',
+                       'assets/minecraft/optifine/sky/world0/sky1.png'):
+            check(needed in z.namelist(), f'{pack.name} missing {needed}')
+        meta = json.loads(z.read('pack.mcmeta'))
+        check(meta['pack']['min_format'] == 75 and meta['pack']['max_format'] == 75, f'Bad pack version: {pack.name}')
+
+java_text = '\n'.join(p.read_text(encoding='utf-8') for p in JAVA.rglob('*.java'))
+check('glBegin(' not in java_text and 'glEnd(' not in java_text, 'Legacy GL calls cannot run in Core Profile')
+check('SkyPano' not in java_text, 'Legacy sky renderer reference remains')
+check('continuousAngle' in (JAVA/'Hud.java').read_text(encoding='utf-8'), 'Uniform ESP rotation code missing')
+check('System.nanoTime()' in (JAVA/'Hud.java').read_text(encoding='utf-8'), 'ESP rotation should use continuous time')
+
+print(f'PASS: Fabric, mixins, bindings, launcher embedding, CI release artifacts, {len(profiles)} shader profiles, {len(packs)} Custom Sky packs and ESP source.')
+print('NOTE: Gradle build, Windows WPF publish and Minecraft GPU runtime tests are separate required checks.')
