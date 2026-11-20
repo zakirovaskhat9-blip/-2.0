@@ -126,7 +126,7 @@ public final class Hud {
         float spawnScale = 0.18f + 0.82f * enter;
         float recoil = lastAttackAt <= 0 ? 0f : clamp01(1f - (now - lastAttackAt) / (float) HIT_RECOIL_MS);
         recoil *= recoil;
-        int tint = Gfx.mix(0xFF39FF14, 0xFFFF4652, recoil * 0.85f);
+        int tint = Gfx.mix(0xFF000000 | Cfg.ESP_TINT.rgb(), 0xFFFF4652, recoil * 0.85f);
         Gfx.alphaMul = 1f;
         float angle = continuousAngle(System.nanoTime(), Cfg.ESP_TURN_SECONDS.v);
         drawMarker(graphics, centerX, centerY, radius * spawnScale * (1.0 + 0.16 * recoil), opacity, angle, tint, recoil);
