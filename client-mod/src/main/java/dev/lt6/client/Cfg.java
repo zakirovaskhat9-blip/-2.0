@@ -144,7 +144,8 @@ public final class Cfg {
 	// LT6 — all new visuals, no legacy modules.
 	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 0, "Neon Chevrons");
 	public static final Slider ESP_TURN_SECONDS = new Slider("turn_seconds", "Оборот за", 1.2, 8.0, 0.2, 3.0, "с");
-	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Шевроны с ровным вращением вокруг тела цели", VIS, true, ESP_STYLE, ESP_TURN_SECONDS);
+	public static final Slider ESP_SIZE = new Slider("esp_size", "Размер ESP", 0.5, 1.75, 0.05, 1.0, "x");
+	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Плавно меняющее скорость вращение вокруг тела цели", VIS, true, ESP_STYLE, ESP_TURN_SECONDS, ESP_SIZE);
 
 	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
 	public static final Module SKY = new Module("sky", "Custom Sky", "Шесть небес, переключение без перезапуска", VIS, false, SKY_PRESET);
