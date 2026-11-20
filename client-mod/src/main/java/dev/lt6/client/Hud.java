@@ -137,9 +137,9 @@ public final class Hud {
                 Cfg.ESP_RED_ON_HIT.v ? recoil : 0f);
         Gfx.alphaMul = 1f;
         if (Cfg.ESP_STYLE.idx == 2) {
-            CelestialSpirits.render(graphics, camera, current, x, y, z, height,
+            CelestialSpirits.render(graphics, camera, x, y, z, height,
                     screenW, screenH, minecraft.options.fov().get(), opacity,
-                    enter, recoil, Cfg.ESP_SIZE.v, Cfg.ESP_GLOW.v);
+                    enter, Cfg.ESP_SIZE.v, Cfg.ESP_GLOW.v);
             return;
         }
         float angle = continuousAngle(System.nanoTime(), Cfg.ESP_TURN_SECONDS.v);
