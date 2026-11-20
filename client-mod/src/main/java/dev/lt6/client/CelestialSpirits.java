@@ -46,8 +46,6 @@ final class CelestialSpirits {
         float visible = Math.max(0f, Math.min(1f, opacity));
         Minecraft mc = Minecraft.getInstance();
 
-        float visible = Math.max(0f, Math.min(1f, opacity));
-
         // A target change eases the spirit into existence with a short overshoot.
         float t = Math.max(0f, Math.min(1f, spawn));
         double appear = 1.0 + 1.70158;
