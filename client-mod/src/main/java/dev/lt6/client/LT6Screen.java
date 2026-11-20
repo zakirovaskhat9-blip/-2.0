@@ -405,7 +405,7 @@ public class LT6Screen extends Screen {
 			} else if (s instanceof Cfg.Slider sl) {
 				int vw = 52, tx = ctrlX, tw = Math.min(156, ctrlW - vw - 8);
 				sliderTrack(g, sl, tx, y + 12, tw, ac, ac2);
-				Gfx.str(g, f, (sl.step < 1 ? String.format(Locale.ROOT, "%.1f", sl.v) : String.valueOf(Math.round(sl.v))) + sl.unit, tx + tw + 8, y + 10, GRAY);
+				Gfx.str(g, f, (sl.step < 0.1 ? String.format(Locale.ROOT, "%.2f", sl.v) : sl.step < 1 ? String.format(Locale.ROOT, "%.1f", sl.v) : String.valueOf(Math.round(sl.v))) + sl.unit, tx + tw + 8, y + 10, GRAY);
 				hit(tx - 4, y + 2, tw + 8, 24, () -> startDrag(sl, m, tx, tw));
 			} else if (s instanceof Cfg.Color col) {
 				colorRow(g, f, m, col, cx, cw, ctrlX, ctrlW, y, ac);
