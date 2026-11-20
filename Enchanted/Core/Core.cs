@@ -57,11 +57,6 @@ public sealed class Config
     public bool VerifyFiles { get; set; } = false;
     public int RamMb { get; set; } = 4096;
     public string CurseForgeKey { get; set; } = "";
-    /// <summary>Адрес сервера скинов (server/skinserver.py), пусто - скины только локальные.</summary>
-    public string SkinServer { get; set; } = "";
-    /// <summary>Секрет, которым этот лаунчер «занимает» ник на сервере скинов (создаётся сам).</summary>
-    public string SkinToken { get; set; } = "";
-    public bool SkinSlim { get; set; } = false;
 
     static string FilePath => Path.Combine(Dirs.Root, "launcher.json");
 
