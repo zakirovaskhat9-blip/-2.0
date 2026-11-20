@@ -113,7 +113,9 @@ public class LT6Screen extends Screen {
 
 		Gfx.vgrad(g, 0, 0, this.width, this.height, 0x44000000, 0x99000000);
 		if (Cfg.UI_PART.v) particles(g, ac);
-		if (Cfg.UI_GLOW.v) Gfx.glow(g, px, py, pw, ph, 10, ac & 0xFFFFFF, 0.6f, 8);
+		// A neutral panel shadow is always visible, even with decorative glow disabled.
+		Gfx.glow(g, px, py, pw, ph, 10, 0x000000, 0.65f, 6);
+		if (Cfg.UI_GLOW.v) Gfx.glow(g, px, py, pw, ph, 10, ac & 0xFFFFFF, 0.35f, 5);
 		Gfx.rr(g, px, py, pw, ph, 10, 0xE60A0A10);
 		Gfx.ring(g, px, py, pw, ph, 10, 1, Gfx.alpha(ac & 0xFFFFFF, 64));
 		Gfx.hgrad(g, px + 16, py, pw - 32, 1, Gfx.a(ac, 0.9f), Gfx.a(ac2, 0.9f));
