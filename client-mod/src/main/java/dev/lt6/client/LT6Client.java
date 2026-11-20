@@ -20,6 +20,7 @@ public final class LT6Client implements ClientModInitializer {
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("lt6", "hud"), (gui, dt) -> {
             Overlay.render(gui, dt);
             Hud.render(gui, dt);
+            EnemyHearts.render(gui, dt);
         });
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             LT6Keys.poll(mc);
