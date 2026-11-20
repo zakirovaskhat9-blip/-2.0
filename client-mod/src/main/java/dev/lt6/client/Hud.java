@@ -23,14 +23,14 @@ public final class Hud {
     private static final long FADE_IN_MS = 150L;
     private static final long FADE_OUT_MS = 260L;
     private static final long HIT_RECOIL_MS = 340L;
-    // Six full turns clockwise, a short stop, six full turns counterclockwise.
+    // Five full turns clockwise, then five counterclockwise, with smooth zero-speed reversals.
     // Velocity follows smooth acceleration -> 1 second at peak -> rapid but
     // smooth braking. At the turn-around speed reaches zero before reversing.
     private static final double TWO_PI = Math.PI * 2.0;
-    private static final double TURNS_PER_DIRECTION = 6.0;
-    private static final double RAMP_UP = 0.72;
-    private static final double HOLD_PEAK = 1.0;
-    private static final double RAMP_DOWN = 0.30;
+    private static final double TURNS_PER_DIRECTION = 5.0;
+    private static final double RAMP_UP = 0.78;
+    private static final double HOLD_PEAK = 0.80;
+    private static final double RAMP_DOWN = 0.62;
     private static final double HALF_CYCLE = RAMP_UP + HOLD_PEAK + RAMP_DOWN;
     private static final double PEAK_RADIANS_PER_SECOND =
             TURNS_PER_DIRECTION * TWO_PI / (0.5 * RAMP_UP + HOLD_PEAK + 0.5 * RAMP_DOWN);
@@ -61,7 +61,7 @@ public final class Hud {
         expiresAt = now + HOLD_MS;
     }
 
-    /** An actual local attack attempt triggers a short recoil and red-tinted glow. */
+    /** An actual attack attempt triggers recoil, with an optional red flash. */
     static void attack(Entity e) {
         hit(e);
         if (e instanceof LivingEntity && e == target) lastAttackAt = System.currentTimeMillis();
@@ -133,8 +133,15 @@ public final class Hud {
         float spawnScale = 0.18f + 0.82f * enter;
         float recoil = lastAttackAt <= 0 ? 0f : clamp01(1f - (now - lastAttackAt) / (float) HIT_RECOIL_MS);
         recoil *= recoil;
-        int tint = Gfx.mix(0xFF000000 | Cfg.ESP_TINT.rgb(), 0xFFFF4652, recoil);
+        int tint = Gfx.mix(0xFF000000 | Cfg.ESP_TINT.rgb(), 0xFFFF4652,
+                Cfg.ESP_RED_ON_HIT.v ? recoil : 0f);
         Gfx.alphaMul = 1f;
+        if (Cfg.ESP_STYLE.idx == 2) {
+            CelestialSpirits.render(graphics, camera, current, x, y, z, height,
+                    screenW, screenH, minecraft.options.fov().get(), opacity,
+                    enter, recoil, Cfg.ESP_SIZE.v, Cfg.ESP_GLOW.v);
+            return;
+        }
         float angle = continuousAngle(System.nanoTime(), Cfg.ESP_TURN_SECONDS.v);
         drawMarker(graphics, centerX, centerY, radius * spawnScale * (1.0 + 0.16 * recoil),
                 opacity, angle, tint, recoil);
@@ -142,11 +149,11 @@ public final class Hud {
 
     /**
      * The animation phase is integrated frame-to-frame so changing the speed
-     * setting never teleports the marker. Each half-cycle has exactly six
+     * setting never teleports the marker. Each half-cycle has exactly five
      * revolutions and a smooth reversal at zero angular velocity.
      *
      * The speed slider is the peak seconds/turn. Default 0.25 gives a
-     * one-second high-speed plateau, with 0.72s acceleration and 0.30s braking.
+     * short high-speed plateau, with 0.78s acceleration and 0.62s braking.
      */
     private static float continuousAngle(long nowNs, double turnSeconds) {
         if (lastFrameNs == 0L) lastFrameNs = nowNs;
@@ -192,7 +199,7 @@ public final class Hud {
         pose.translate((float) cx, (float) cy);
         pose.rotate(angle);
         pose.scale(scale, scale);
-        TargetEspSprite.render(g, tint, opacity, glow);
+        TargetEspSprite.render(g, tint, opacity, glow, Cfg.ESP_STYLE.idx);
         pose.popMatrix();
     }
 
