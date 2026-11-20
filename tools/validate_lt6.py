@@ -54,7 +54,7 @@ for name in names:
 
 cfg = (source/'Cfg.java').read_text(encoding='utf8')
 assert 'SkyPacks.select' in cfg
-assert 'mc.getWindow().getWindow()' in (source/'Binds.java').read_text(encoding='utf8')
+assert 'mc.getWindow().handle()' in (source/'Binds.java').read_text(encoding='utf8')
 assert 'require = 1' in (source/'mixin/HitColorMixin.java').read_text(encoding='utf8')
 assert '"Контраст", -100, 100' in cfg
 assert 'ColorFX.tick(mc)' in (source/'LT6Client.java').read_text(encoding='utf8')
