@@ -207,21 +207,16 @@ public final class Gfx {
 		return Math.min(in, r);
 	}
 
-	/** Мягкое свечение/тень: n колец по 4 прямоугольника (углы срезаны), в разы дешевле скруглённых колец. */
+	/** Мягкая тень с непрерывными скруглёнными углами. */
 	static void glow(GuiGraphics g, int x, int y, int w, int h, int r, int rgb, float strength, int n) {
-		n = Math.min(n, 6);
+		if (w <= 0 || h <= 0 || strength <= 0) return;
+		n = Math.max(1, Math.min(n, 8));
 		for (int k = n; k >= 1; k--) {
 			float f = 1f - (k - 1f) / n;
 			int al = (int) (255 * strength * f * f * 2.2f / n);
 			if (al <= 0) continue;
-			int c = ga(alpha(rgb, al));
-			if ((c >>> 24) == 0) continue;
-			int cut = Math.min(r + k, Math.min(w, h) / 2) / 2 + 1;
-			int x0 = x - k, y0 = y - k, x1 = x + w + k, y1 = y + h + k;
-			g.fill(x0 + cut, y0, x1 - cut, y0 + 1, c);
-			g.fill(x0 + cut, y1 - 1, x1 - cut, y1, c);
-			g.fill(x0, y0 + cut, x0 + 1, y1 - cut, c);
-			g.fill(x1 - 1, y0 + cut, x1, y1 - cut, c);
+			// Rounded outlines include all corners, unlike the previous four straight strokes.
+			ring(g, x - k, y - k, w + 2 * k, h + 2 * k, r + k, 1, alpha(rgb, al));
 		}
 	}
 
