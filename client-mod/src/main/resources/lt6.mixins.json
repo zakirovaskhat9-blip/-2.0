@@ -5,7 +5,8 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "HitColorMixin",
-    "LT6PostEffectBridge"
+    "LT6PostEffectBridge",
+    "FirstPersonViewMixin"
   ],
   "injectors": {
     "defaultRequire": 0
