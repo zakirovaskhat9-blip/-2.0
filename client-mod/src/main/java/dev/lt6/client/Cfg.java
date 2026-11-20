@@ -160,6 +160,31 @@ public final class Cfg {
 	}
 
 	public static final Module FPS = new Module("fps", "FPS Counter", "Частота кадров", HUD, true);
+	public static final Module PING = new Module("ping", "Ping Counter", "Текущий пинг до сервера в миллисекундах", HUD, true);
+
+	public static final Slider HEARTS_SIZE = new Slider("size", "Размер сердец", 0.6, 2.0, 0.1, 1.0, "x");
+	public static final Module ENEMY_HEARTS = new Module("enemy_hearts", "Enemy Hearts", "Здоровье игроков над головой, с учётом поглощения", VIS, true, HEARTS_SIZE);
+
+	// Руки: основной и второй руке можно задать собственную позицию и размер.
+	// Смещения в единицах пространства рендера первого лица (не блоки мира).
+	public static final Slider MAIN_HAND_SIZE = new Slider("main_scale", "Основная: размер руки", 0.3, 2.5, 0.05, 1.0, "x");
+	public static final Slider MAIN_HAND_X = new Slider("main_x", "Основная: X", -1.5, 1.5, 0.05, 0, "");
+	public static final Slider MAIN_HAND_Y = new Slider("main_y", "Основная: Y", -1.5, 1.5, 0.05, 0, "");
+	public static final Slider MAIN_HAND_Z = new Slider("main_z", "Основная: Z", -1.5, 1.5, 0.05, 0, "");
+	public static final Slider OFF_HAND_SIZE = new Slider("off_scale", "Вторая: размер руки", 0.3, 2.5, 0.05, 1.0, "x");
+	public static final Slider OFF_HAND_X = new Slider("off_x", "Вторая: X", -1.5, 1.5, 0.05, 0, "");
+	public static final Slider OFF_HAND_Y = new Slider("off_y", "Вторая: Y", -1.5, 1.5, 0.05, 0, "");
+	public static final Slider OFF_HAND_Z = new Slider("off_z", "Вторая: Z", -1.5, 1.5, 0.05, 0, "");
+	public static final Module HAND_VIEW = new Module("hand_view", "Viewmodel Hands", "Положение и масштаб рук от первого лица", VIS, true,
+		MAIN_HAND_SIZE, MAIN_HAND_X, MAIN_HAND_Y, MAIN_HAND_Z, OFF_HAND_SIZE, OFF_HAND_X, OFF_HAND_Y, OFF_HAND_Z);
+
+	// Дополнительные преобразования только модели предмета, независимо от общей руки.
+	public static final Slider ITEM_VIEW_SIZE = new Slider("item_scale", "Размер предмета", 0.3, 2.5, 0.05, 1.0, "x");
+	public static final Slider ITEM_VIEW_X = new Slider("item_x", "Предмет: X", -1.5, 1.5, 0.05, 0, "");
+	public static final Slider ITEM_VIEW_Y = new Slider("item_y", "Предмет: Y", -1.5, 1.5, 0.05, 0, "");
+	public static final Slider ITEM_VIEW_Z = new Slider("item_z", "Предмет: Z", -1.5, 1.5, 0.05, 0, "");
+	public static final Module ITEM_VIEW = new Module("item_view", "Viewmodel Items", "Независимый размер и положение предметов в руках", VIS, true,
+		ITEM_VIEW_SIZE, ITEM_VIEW_X, ITEM_VIEW_Y, ITEM_VIEW_Z);
 
 	public static final Color HIT_TINT = new Color("color", "Цвет попадания", 1);
 	public static final Slider HIT_SIZE = new Slider("size", "Размер частиц", 0.5, 2.5, 0.1, 1.0, "x");
@@ -185,7 +210,7 @@ public final class Cfg {
 	static final Bool UI_BLUR = new Bool("blur", "Размытие меню", false);
 	static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR);
 
-	static final List<Module> ALL = List.of(TARGET_ESP, SKY, FPS, HIT_COLOR, FILTER, CONTRAST, BRIGHTNESS, JUMP_CIRCLES);
+	static final List<Module> ALL = List.of(TARGET_ESP, SKY, FPS, PING, ENEMY_HEARTS, HAND_VIEW, ITEM_VIEW, HIT_COLOR, FILTER, CONTRAST, BRIGHTNESS, JUMP_CIRCLES);
 
 	static Options opts() { return Minecraft.getInstance().options; }
 
