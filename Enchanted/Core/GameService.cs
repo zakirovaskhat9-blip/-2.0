@@ -212,12 +212,6 @@ public sealed class GameService
             try { Skies.Seed(); }
             catch (Exception e) { Log.W("LT6 sky packs: " + e); }
         }
-        if (mc == "1.21.11")
-        {
-            var nick = string.IsNullOrWhiteSpace(cfg.Nick) ? "Player" : cfg.Nick.Trim();
-            SkinStore.WriteModConfig(mc, cfg, nick);
-            _ = Task.Run(async () => { var err = await SkinStore.UploadAsync(cfg, nick); if (err != null) Log.W("скин при запуске: " + err); });
-        }
         var mods = new ModManager(Http, cfg);
         int missing = await mods.EnsureAsync(mc, status, row, ct);
         if (mc == "1.21.11")
