@@ -145,7 +145,7 @@ public final class Cfg {
 	// LT6 — all new visuals, no legacy modules.
 	public static final Choice ESP_STYLE = new Choice("style", "Стиль", 0, "Стандарт", "Нурсултан ромб", "Целестиал духи");
 	public static final Slider ESP_TURN_SECONDS = new Slider("spin_period", "Скорость вращения", 0.15, 1.2, 0.05, 0.25, "с/об");
-	public static final Slider ESP_SIZE = new Slider("esp_size", "Размер ESP", 0.5, 1.75, 0.05, 1.0, "x");
+	public static final Slider ESP_SIZE = new Slider("esp_size", "Размер ESP", 0.5, 20.0, 0.05, 1.0, "x");
 	public static final Color ESP_TINT = new Color("esp_color", "Цвет ESP", 0x1000000 + 0x39FF14);
 	public static final Slider ESP_GLOW = new Slider("esp_glow", "Сила свечения", 0, 200, 10, 140, "%");
 	public static final Bool ESP_RED_ON_HIT = new Bool("red_on_hit", "Покраснение при ударе", false);
