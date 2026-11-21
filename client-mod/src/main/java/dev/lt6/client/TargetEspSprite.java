@@ -70,7 +70,7 @@ final class TargetEspSprite {
         try {
             register(CORE_ID, makeImage(false, false), "LT6 Standard core");
             register(BLOOM_ID, makeImage(true, false), "LT6 Standard bloom");
-            register(DIAMOND_CORE, makeImage(false, true), "LT6 Nursultan rounded core");
+            register(DIAMOND_CORE, makeImage(false, true), "LT6 Nursultan thick tapered core");
             register(DIAMOND_BLOOM, makeImage(true, true), "LT6 Nursultan bloom");
             initialized = true;
         } catch (RuntimeException e) {
@@ -93,26 +93,50 @@ final class TargetEspSprite {
             double py = (y + 0.5) * multiplier - DRAW_SIZE / 2.0;
             for (int x = 0; x < TEXTURE_SIZE; x++) {
                 double px = (x + 0.5) * multiplier - DRAW_SIZE / 2.0;
-                double minDist2 = Double.POSITIVE_INFINITY;
-                for (double[] segment : SEGMENTS) {
-                    minDist2 = Math.min(minDist2, distSquaredToSegment(
-                            px, py, segment[0], segment[1], segment[2], segment[3]));
-                }
-
                 double alpha;
-                if (bloom) {
-                    // Broad Gaussian halo: strong near the stroke, feathered out
-                    // at both tips and corners with a fully transparent background.
-                    double spread = diamond ? 1.12 : 1.0;
-                    alpha = 0.70 * Math.exp(-minDist2 / (2.0 * 5.0 * spread * 5.0 * spread))
-                            + 0.36 * Math.exp(-minDist2 / (2.0 * 11.0 * spread * 11.0 * spread));
+                if (diamond) {
+                    // Mirror-symmetric open diamond: tips are slimmer, corners thicker.
+                    // Independent rounded strokes retain smooth, clean anti-aliased edges.
+                    double signedDistance = Double.POSITIVE_INFINITY;
+                    for (int i = 0; i < SEGMENTS.length; i++) {
+                        double[] segment = SEGMENTS[i];
+                        double dx = segment[2] - segment[0];
+                        double dy = segment[3] - segment[1];
+                        double t = ((px - segment[0]) * dx + (py - segment[1]) * dy)
+                                / (dx * dx + dy * dy);
+                        t = Math.max(0.0, Math.min(1.0, t));
+                        double nearCorner = (i & 1) == 0 ? t : 1.0 - t;
+                        double rounded = nearCorner * nearCorner * (3.0 - 2.0 * nearCorner);
+                        double thickness = 5.5 + 2.1 * rounded;
+                        double ex = px - (segment[0] + t * dx);
+                        double ey = py - (segment[1] + t * dy);
+                        signedDistance = Math.min(signedDistance,
+                                Math.sqrt(ex * ex + ey * ey) - thickness);
+                    }
+                    if (bloom) {
+                        // This layer is invisible at 0% glow.
+                        double outside = Math.max(0.0, signedDistance);
+                        alpha = 0.65 * Math.exp(-outside * outside / (2.0 * 4.0 * 4.0))
+                                + 0.22 * Math.exp(-outside * outside / (2.0 * 8.0 * 8.0));
+                    } else {
+                        double coverage = Math.max(0.0, Math.min(1.0, 0.5 - signedDistance));
+                        alpha = coverage * coverage * (3.0 - 2.0 * coverage);
+                    }
                 } else {
-                    // Smooth capsule distance field. Rounded segment caps and tip
-                    // joins, with subpixel coverage for much cleaner diagonals.
-                    double d = Math.sqrt(minDist2);
-                    double edge = Math.max(0.0, Math.min(1.0,
-                            ((diamond ? 4.95 : 2.75) - d) / 1.3));
-                    alpha = edge * edge * (3.0 - 2.0 * edge);
+                    // Preserve the Standard style exactly as before.
+                    double minDist2 = Double.POSITIVE_INFINITY;
+                    for (double[] segment : SEGMENTS) {
+                        minDist2 = Math.min(minDist2, distSquaredToSegment(
+                                px, py, segment[0], segment[1], segment[2], segment[3]));
+                    }
+                    if (bloom) {
+                        alpha = 0.70 * Math.exp(-minDist2 / (2.0 * 5.0 * 5.0))
+                                + 0.36 * Math.exp(-minDist2 / (2.0 * 11.0 * 11.0));
+                    } else {
+                        double d = Math.sqrt(minDist2);
+                        double edge = Math.max(0.0, Math.min(1.0, (2.75 - d) / 1.3));
+                        alpha = edge * edge * (3.0 - 2.0 * edge);
+                    }
                 }
                 int a = (int) Math.round(255.0 * Math.max(0.0, Math.min(1.0, alpha)));
                 image.setPixelABGR(x, y, (a << 24) | 0x00FFFFFF);

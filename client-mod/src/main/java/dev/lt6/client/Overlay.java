@@ -5,7 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.PlayerInfo;
 
-/** Independent FPS and latency counters in the top-left HUD. */
+/** Unified FPS and ping display in one compact top-left HUD panel. */
 public final class Overlay {
     private static int frames, fps;
     private static long since = System.currentTimeMillis();
@@ -24,29 +24,41 @@ public final class Overlay {
             frames = 0;
         }
 
-        int y = 7;
-        if (Cfg.FPS.enabled) {
-            drawCounter(gui, mc, y, "LT6   FPS " + fps, Cfg.accent());
-            y += 28;
-        }
+        // FPS and ping share one GUI panel, but can still be toggled separately.
+        if (!Cfg.FPS.enabled && !Cfg.PING.enabled) return;
+        String fpsText = Cfg.FPS.enabled ? "FPS " + fps : null;
+        String pingText = null;
+        int pingColor = 0xFF9EADBC;
         if (Cfg.PING.enabled) {
             int ping = -1;
             if (mc.getConnection() != null) {
                 PlayerInfo info = mc.getConnection().getPlayerInfo(mc.player.getUUID());
                 if (info != null) ping = info.getLatency();
             }
-            int color = ping < 0 ? 0xFF9EADBC
+            pingColor = ping < 0 ? 0xFF9EADBC
                     : ping < 100 ? 0xFF65DDA9 : ping < 200 ? 0xFFFFD16A : 0xFFFF7777;
-            String label = "PING   " + (ping < 0 ? "—" : ping + " ms");
-            drawCounter(gui, mc, y, label, color);
+            pingText = "PING " + (ping < 0 ? "—" : ping + " ms");
         }
-    }
 
-    private static void drawCounter(GuiGraphics gui, Minecraft mc, int y,
-                                    String label, int color) {
-        int width = mc.font.width(label) + 24;
-        Gfx.panel(gui, 7, y, width, 22);
-        Gfx.rect(gui, 11, y + 6, 14, y + 16, color);
-        Gfx.str(gui, mc.font, label, 19, y + 7, 0xFFFFFFFF);
+        final int x = 7, y = 7;
+        int width = 24 + mc.font.width("LT6");
+        if (fpsText != null) width += 14 + mc.font.width(fpsText);
+        if (pingText != null) width += 14 + mc.font.width(pingText);
+        Gfx.panel(gui, x, y, width, 22);
+
+        int textX = x + 12;
+        Gfx.str(gui, mc.font, "LT6", textX, y + 7, Cfg.accent());
+        textX += mc.font.width("LT6");
+        if (fpsText != null) {
+            Gfx.rect(gui, textX + 7, y + 6, textX + 8, y + 16, 0x44FFFFFF);
+            textX += 14;
+            Gfx.str(gui, mc.font, fpsText, textX, y + 7, 0xFFFFFFFF);
+            textX += mc.font.width(fpsText);
+        }
+        if (pingText != null) {
+            Gfx.rect(gui, textX + 7, y + 6, textX + 8, y + 16, 0x44FFFFFF);
+            textX += 14;
+            Gfx.str(gui, mc.font, pingText, textX, y + 7, pingColor);
+        }
     }
 }

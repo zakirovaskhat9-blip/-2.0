@@ -133,7 +133,8 @@ public final class Hud {
         float spawnScale = 0.18f + 0.82f * enter;
         float recoil = lastAttackAt <= 0 ? 0f : clamp01(1f - (now - lastAttackAt) / (float) HIT_RECOIL_MS);
         recoil *= recoil;
-        int tint = Gfx.mix(0xFF000000 | Cfg.ESP_TINT.rgb(), 0xFFFF4652,
+        int baseColor = Cfg.ESP_STYLE.idx == 1 ? Cfg.ESP_DIAMOND_TINT.rgb() : Cfg.ESP_TINT.rgb();
+        int tint = Gfx.mix(0xFF000000 | baseColor, 0xFFFF4652,
                 Cfg.ESP_RED_ON_HIT.v ? recoil : 0f);
         Gfx.alphaMul = 1f;
         if (Cfg.ESP_STYLE.idx == 2) {
