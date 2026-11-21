@@ -37,6 +37,16 @@ final class TargetEspSprite {
             {-23,-13,  -36,   0}, {-36, 0,  -23,  13}
     };
 
+    // A symmetric, four-piece open square. The outer silhouette remains square;
+    // each INNER tip has a short flat facet, making its angles obtuse, not 90°.
+    // Stroke tapers gently toward the open ends; bloom stays independent.
+    private static final double[][] NURSULTAN_TOP = {
+            {-16.5, -26.0}, {-3.5, -39.0}, {-1.6, -41.5}, {1.6, -41.5},
+            {3.5, -39.0}, {16.5, -26.0}, {17.2, -23.0}, {15.0, -19.8},
+            {12.1, -19.1}, {9.2, -21.0}, {3.0, -27.0}, {-3.0, -27.0},
+            {-9.2, -21.0}, {-12.1, -19.1}, {-15.0, -19.8}, {-17.2, -23.0}
+    };
+
     private static boolean initialized;
     private static boolean failed;
 
@@ -70,7 +80,7 @@ final class TargetEspSprite {
         try {
             register(CORE_ID, makeImage(false, false), "LT6 Standard core");
             register(BLOOM_ID, makeImage(true, false), "LT6 Standard bloom");
-            register(DIAMOND_CORE, makeImage(false, true), "LT6 Nursultan thick tapered core");
+            register(DIAMOND_CORE, makeImage(false, true), "LT6 Nursultan obtuse inner corners core");
             register(DIAMOND_BLOOM, makeImage(true, true), "LT6 Nursultan bloom");
             initialized = true;
         } catch (RuntimeException e) {
@@ -95,24 +105,9 @@ final class TargetEspSprite {
                 double px = (x + 0.5) * multiplier - DRAW_SIZE / 2.0;
                 double alpha;
                 if (diamond) {
-                    // Mirror-symmetric open diamond: tips are slimmer, corners thicker.
-                    // Independent rounded strokes retain smooth, clean anti-aliased edges.
-                    double signedDistance = Double.POSITIVE_INFINITY;
-                    for (int i = 0; i < SEGMENTS.length; i++) {
-                        double[] segment = SEGMENTS[i];
-                        double dx = segment[2] - segment[0];
-                        double dy = segment[3] - segment[1];
-                        double t = ((px - segment[0]) * dx + (py - segment[1]) * dy)
-                                / (dx * dx + dy * dy);
-                        t = Math.max(0.0, Math.min(1.0, t));
-                        double nearCorner = (i & 1) == 0 ? t : 1.0 - t;
-                        double rounded = nearCorner * nearCorner * (3.0 - 2.0 * nearCorner);
-                        double thickness = 5.5 + 2.1 * rounded;
-                        double ex = px - (segment[0] + t * dx);
-                        double ey = py - (segment[1] + t * dy);
-                        signedDistance = Math.min(signedDistance,
-                                Math.sqrt(ex * ex + ey * ey) - thickness);
-                    }
+                    // A smooth SDF of four identical 90-degree rotated shapes.
+                    // The INNER silhouette is chamfered to an obtuse angle.
+                    double signedDistance = nursultanDistance(px, py);
                     if (bloom) {
                         // This layer is invisible at 0% glow.
                         double outside = Math.max(0.0, signedDistance);
@@ -143,6 +138,39 @@ final class TargetEspSprite {
             }
         }
         return image;
+    }
+
+    private static double nursultanDistance(double x, double y) {
+        double result = Double.POSITIVE_INFINITY;
+        double lx = x;
+        double ly = y;
+        for (int turn = 0; turn < 4; turn++) {
+            // Skip far-away parts to reduce one-time texture generation cost.
+            if (Math.abs(lx) < 21.0 && ly > -45.0 && ly < -15.0) {
+                result = Math.min(result, polygonDistance(lx, ly, NURSULTAN_TOP));
+            }
+            double tmp = lx;
+            lx = -ly;
+            ly = tmp;
+        }
+        // A small rounded offset softens all corners without enlarging the ESP.
+        return result - 0.5;
+    }
+
+    private static double polygonDistance(double x, double y, double[][] points) {
+        double shortest = Double.POSITIVE_INFINITY;
+        boolean inside = false;
+        for (int i = 0, j = points.length - 1; i < points.length; j = i++) {
+            double ax = points[j][0], ay = points[j][1];
+            double bx = points[i][0], by = points[i][1];
+            shortest = Math.min(shortest, distSquaredToSegment(x, y, ax, ay, bx, by));
+            if ((ay > y) != (by > y)
+                    && x < (bx - ax) * (y - ay) / (by - ay) + ax) {
+                inside = !inside;
+            }
+        }
+        double distance = Math.sqrt(shortest);
+        return inside ? -distance : distance;
     }
 
     private static double distSquaredToSegment(double x, double y,
