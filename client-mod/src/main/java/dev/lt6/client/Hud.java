@@ -194,7 +194,8 @@ public final class Hud {
                                    float opacity, float angle, int tint, float recoil) {
         float scale = (float) (radius / 40.0);
         float glowPulse = (float) (0.94 + 0.06 * Math.sin(System.nanoTime() * 1.6e-9));
-        double glow = Cfg.ESP_GLOW.v * (glowPulse + recoil * 0.45f);
+        double glowLevel = Cfg.ESP_STYLE.idx == 1 ? Cfg.ESP_DIAMOND_GLOW.v : Cfg.ESP_GLOW.v;
+        double glow = glowLevel * (glowPulse + recoil * 0.45f);
         var pose = g.pose();
         pose.pushMatrix();
         pose.translate((float) cx, (float) cy);

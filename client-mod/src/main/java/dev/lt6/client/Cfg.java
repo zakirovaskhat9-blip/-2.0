@@ -148,9 +148,10 @@ public final class Cfg {
 	public static final Slider ESP_SIZE = new Slider("esp_size", "Размер ESP", 0.5, 20.0, 0.05, 1.0, "x");
 	public static final Color ESP_TINT = new Color("esp_color", "Цвет ESP", 0x1000000 + 0x39FF14);
 	public static final Color ESP_DIAMOND_TINT = new Color("diamond_color", "Цвет ромба", 0x1000000 + 0xBDF5FF);
+	public static final Slider ESP_DIAMOND_GLOW = new Slider("diamond_glow", "Свечение ромба", 0, 200, 10, 0, "%");
 	public static final Slider ESP_GLOW = new Slider("esp_glow", "Сила свечения", 0, 200, 10, 0, "%");
 	public static final Bool ESP_RED_ON_HIT = new Bool("red_on_hit", "Покраснение при ударе", false);
-	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Три стиля: Стандарт, Нурсултан ромб и Целестиал духи", VIS, true, ESP_STYLE, ESP_TURN_SECONDS, ESP_SIZE, ESP_TINT, ESP_DIAMOND_TINT, ESP_GLOW, ESP_RED_ON_HIT);
+	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Три стиля: Стандарт, Нурсултан ромб и Целестиал духи", VIS, true, ESP_STYLE, ESP_TURN_SECONDS, ESP_SIZE, ESP_TINT, ESP_DIAMOND_TINT, ESP_DIAMOND_GLOW, ESP_GLOW, ESP_RED_ON_HIT);
 
 	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
 	public static final Module SKY = new Module("sky", "Custom Sky", "Шесть небес, переключение без перезапуска", VIS, false, SKY_PRESET);
