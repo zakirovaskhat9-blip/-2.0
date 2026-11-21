@@ -42,7 +42,7 @@ final class CelestialSpirits {
         setup(camera, sw, sh, fov);
         double time = System.nanoTime() * 1e-9;
         double headY = worldY + entityHeight * 0.72;
-        double size = Math.max(0.40, Math.min(1.8, overallSize));
+        double size = Math.max(0.40, Math.min(20.0, overallSize));
         float visible = Math.max(0f, Math.min(1f, opacity));
         Minecraft mc = Minecraft.getInstance();
 
@@ -75,14 +75,14 @@ final class CelestialSpirits {
                 float alpha = visible * tail * tail;
                 int color = Gfx.mix(CYAN, VIOLET,
                         (float)(0.5 + 0.5 * Math.sin(time * 0.8 + phase + trail * 0.13)));
-                double screenScale = Math.min(33.0, Math.max(5.0,
-                        sh * 0.040 * animatedSize / Math.max(1.5, p.depth)));
+                double screenScale = size * Math.min(33.0, Math.max(5.0,
+                        sh * 0.040 * Math.max(0.01, eased) / Math.max(1.5, p.depth)));
                 double radius = screenScale * 2.0 * (trail == 0 ? 1.0 : (0.16 + 0.8 * tail));
                 double glow = Math.max(0.25, Math.min(2.0, glowStrength / 100.0));
-                drawGlow(g, p.x, p.y, radius * (0.85 + glow * 0.45), color, alpha);
+                drawGlow(g, p.x, p.y, radius * (0.85 + glow * 0.45), color, alpha, size);
                 if (trail == 0) {
                     // White core gives each round spirit a distinct spherical center.
-                    drawGlow(g, p.x, p.y, radius * 0.34, 0xFFFFFFFF, alpha);
+                    drawGlow(g, p.x, p.y, radius * 0.34, 0xFFFFFFFF, alpha, size);
                 }
             }
         }
@@ -120,12 +120,13 @@ final class CelestialSpirits {
     }
 
     private static void drawGlow(GuiGraphics g,double x,double y,double radius,
-                                 int color,float alpha) {
+                                 int color,float alpha,double scale) {
         if (!textureReady || radius < .2 || alpha < .006) return;
-        int size=(int)Math.max(2,Math.min(130,Math.round(radius*2)));
+        // Keep the original 130px sprite cap at 1x, and grow it with ESP size.
+        int spriteSize=(int)Math.max(2,Math.min(130.0*scale,Math.round(radius*2)));
         g.blit(RenderPipelines.GUI_TEXTURED,GHOST_SPRITE,
-                (int)Math.round(x-size/2.0),(int)Math.round(y-size/2.0),
-                0f,0f,size,size,SPRITE_SIZE,SPRITE_SIZE,
+                (int)Math.round(x-spriteSize/2.0),(int)Math.round(y-spriteSize/2.0),
+                0f,0f,spriteSize,spriteSize,SPRITE_SIZE,SPRITE_SIZE,
                 SPRITE_SIZE,SPRITE_SIZE,Gfx.a(color,alpha));
     }
 
