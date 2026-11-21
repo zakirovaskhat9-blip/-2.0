@@ -190,7 +190,9 @@ public final class Cfg {
 
 	public static final Color HIT_TINT = new Color("color", "Цвет попадания", 1);
 	public static final Slider HIT_SIZE = new Slider("size", "Размер частиц", 0.5, 2.5, 0.1, 1.0, "x");
-	public static final Module HIT_COLOR = new Module("hit_color", "Hit Color", "Цвет модели в момент получения урона + частицы", VIS, true, HIT_TINT, HIT_SIZE);
+	public static final Bool HIT_GLOW = new Bool("glow", "Свечение модели", false);
+	public static final Slider HIT_GLOW_STRENGTH = new Slider("glow_strength", "Интенсивность свечения", 0, 200, 10, 100, "%");
+	public static final Module HIT_COLOR = new Module("hit_color", "Hit Color", "Однотонный цвет игрока и брони при ударе", VIS, true, HIT_TINT, HIT_GLOW, HIT_GLOW_STRENGTH, HIT_SIZE);
 
 	public static final Slider WARMTH = new Slider("warmth", "Температура цвета", -100, 100, 5, 0, "%");
 	public static final Module FILTER = new Module("filter", "Color Filter", "Шейдер тёплых/холодных оттенков", VIS, false, WARMTH);
