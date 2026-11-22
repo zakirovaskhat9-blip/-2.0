@@ -20,7 +20,6 @@ public final class LT6Client implements ClientModInitializer {
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("lt6", "hud"), (gui, dt) -> {
             Overlay.render(gui, dt);
             Hud.render(gui, dt);
-            EnemyHearts.render(gui, dt);
         });
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             LT6Keys.poll(mc);
@@ -28,14 +27,12 @@ public final class LT6Client implements ClientModInitializer {
             ColorFX.tick(mc);
             if (mc.player == null || mc.level == null) return;
             Binds.poll(mc);
-            JumpFX.tick(mc);
             SkyOptions.tick(mc);
             SkyPacks.tick(mc);
         });
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
             if (world.isClientSide() && player == Minecraft.getInstance().player) {
                 Hud.attack(entity);
-                HitFX.hit(entity);
             }
             return InteractionResult.PASS;
         });

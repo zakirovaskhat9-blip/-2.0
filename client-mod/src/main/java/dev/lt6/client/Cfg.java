@@ -161,11 +161,12 @@ public final class Cfg {
 		SKY.apply(() -> SkyPacks.select(SKY_PRESET.idx, SKY.enabled));
 	}
 
-	public static final Module FPS = new Module("fps", "FPS Counter", "Частота кадров", HUD, true);
-	public static final Module PING = new Module("ping", "Ping Counter", "Текущий пинг до сервера в миллисекундах", HUD, true);
+	public static final Slider FPS_SIZE = new Slider("size", "Размер FPS", 0.5, 4.0, 0.1, 1.0, "x");
+	public static final Module FPS = new Module("fps", "FPS Counter", "Счётчик FPS с настраиваемым размером", HUD, true, FPS_SIZE);
+	public static final Module PING = new Module("ping", "Ping Counter", "Текущий пинг до сервера в миллисекундах", HUD, false);
 
 	public static final Slider HEARTS_SIZE = new Slider("size", "Размер сердец", 0.6, 2.0, 0.1, 1.0, "x");
-	public static final Module ENEMY_HEARTS = new Module("enemy_hearts", "Enemy Hearts", "Здоровье игроков над головой, с учётом поглощения", VIS, true, HEARTS_SIZE);
+	public static final Module ENEMY_HEARTS = new Module("enemy_hearts", "Enemy Hearts", "Здоровье игроков над головой, с учётом поглощения", VIS, false, HEARTS_SIZE);
 
 	// Руки: основной и второй руке можно задать собственную позицию и размер.
 	// Смещения в единицах пространства рендера первого лица (не блоки мира).
@@ -177,7 +178,7 @@ public final class Cfg {
 	public static final Slider OFF_HAND_X = new Slider("off_x", "Вторая: X", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider OFF_HAND_Y = new Slider("off_y", "Вторая: Y", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider OFF_HAND_Z = new Slider("off_z", "Вторая: Z", -1.5, 1.5, 0.05, 0, "");
-	public static final Module HAND_VIEW = new Module("hand_view", "Viewmodel Hands", "Положение и масштаб рук от первого лица", VIS, true,
+	public static final Module HAND_VIEW = new Module("hand_view", "Viewmodel Hands", "Положение и масштаб рук от первого лица", VIS, false,
 		MAIN_HAND_SIZE, MAIN_HAND_X, MAIN_HAND_Y, MAIN_HAND_Z, OFF_HAND_SIZE, OFF_HAND_X, OFF_HAND_Y, OFF_HAND_Z);
 
 	// Дополнительные преобразования только модели предмета, независимо от общей руки.
@@ -185,14 +186,14 @@ public final class Cfg {
 	public static final Slider ITEM_VIEW_X = new Slider("item_x", "Предмет: X", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_VIEW_Y = new Slider("item_y", "Предмет: Y", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_VIEW_Z = new Slider("item_z", "Предмет: Z", -1.5, 1.5, 0.05, 0, "");
-	public static final Module ITEM_VIEW = new Module("item_view", "Viewmodel Items", "Независимый размер и положение предметов в руках", VIS, true,
+	public static final Module ITEM_VIEW = new Module("item_view", "Viewmodel Items", "Независимый размер и положение предметов в руках", VIS, false,
 		ITEM_VIEW_SIZE, ITEM_VIEW_X, ITEM_VIEW_Y, ITEM_VIEW_Z);
 
 	public static final Color HIT_TINT = new Color("color", "Цвет попадания", 1);
 	public static final Slider HIT_SIZE = new Slider("size", "Размер частиц", 0.5, 2.5, 0.1, 1.0, "x");
 	public static final Bool HIT_GLOW = new Bool("glow", "Свечение модели", false);
 	public static final Slider HIT_GLOW_STRENGTH = new Slider("glow_strength", "Интенсивность свечения", 0, 200, 10, 100, "%");
-	public static final Module HIT_COLOR = new Module("hit_color", "Hit Color", "Однотонный цвет игрока и брони при ударе", VIS, true, HIT_TINT, HIT_GLOW, HIT_GLOW_STRENGTH, HIT_SIZE);
+	public static final Module HIT_COLOR = new Module("hit_color", "Hit Color", "Однотонный цвет игрока и брони при ударе", VIS, false, HIT_TINT, HIT_GLOW, HIT_GLOW_STRENGTH, HIT_SIZE);
 
 	public static final Slider WARMTH = new Slider("warmth", "Температура цвета", -100, 100, 5, 0, "%");
 	public static final Module FILTER = new Module("filter", "Color Filter", "Шейдер тёплых/холодных оттенков", VIS, false, WARMTH);
@@ -205,7 +206,7 @@ public final class Cfg {
 
 	public static final Color JUMP_TINT = new Color("color", "Цвет круга", 5);
 	public static final Slider JUMP_RADIUS = new Slider("radius", "Радиус", 0.6, 2.5, 0.1, 1.2, "м");
-	public static final Module JUMP_CIRCLES = new Module("jump_circles", "Jump Circles", "Цветная волна при прыжке и приземлении", PLAYER, true, JUMP_TINT, JUMP_RADIUS);
+	public static final Module JUMP_CIRCLES = new Module("jump_circles", "Jump Circles", "Цветная волна при прыжке и приземлении", PLAYER, false, JUMP_TINT, JUMP_RADIUS);
 
 	static final Slider UI_OPACITY = new Slider("opacity", "Прозрачность плашек", 30, 100, 5, 72, "%");
 	static final Slider UI_ROUND = new Slider("round", "Скругление", 0, 8, 1, 4, " px");
@@ -214,7 +215,8 @@ public final class Cfg {
 	static final Bool UI_BLUR = new Bool("blur", "Размытие меню", false);
 	static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR);
 
-	static final List<Module> ALL = List.of(TARGET_ESP, SKY, FPS, PING, ENEMY_HEARTS, HAND_VIEW, ITEM_VIEW, HIT_COLOR, FILTER, CONTRAST, BRIGHTNESS, JUMP_CIRCLES);
+	// Only these three features are exposed or persisted by the simplified LT6 client.
+	static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY);
 
 	static Options opts() { return Minecraft.getInstance().options; }
 
