@@ -10,7 +10,8 @@
     "FirstPersonViewMixin",
     "LT6PostChainAccess",
     "LT6PostPassAccess",
-    "LT6LoadingOverlayMixin"
+    "LT6LoadingOverlayMixin",
+    "LT6ChatEditMixin"
   ],
   "injectors": {
     "defaultRequire": 0
