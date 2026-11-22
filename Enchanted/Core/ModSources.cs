@@ -14,13 +14,13 @@ public abstract class ModSource
     public abstract Task<ModFile?> FindAsync(string idOrSlug, string mc, CancellationToken ct);
 }
 
-/// <summary>Modrinth и его API-совместимые зеркала (MCIM: mod.mcimirror.top/modrinth).</summary>
+/// <summary>Only official Modrinth API and CDN hosts.</summary>
 public sealed class ModrinthSource : ModSource
 {
     readonly HttpClient http;
-    readonly string api, label, cdnFrom, cdnTo;
-    public ModrinthSource(HttpClient http, string label, string api, string cdnFrom = "", string cdnTo = "")
-    { this.http = http; this.label = label; this.api = api.TrimEnd('/'); this.cdnFrom = cdnFrom; this.cdnTo = cdnTo; }
+    readonly string api, label;
+    public ModrinthSource(HttpClient http, string label, string api)
+    { this.http = http; this.label = label; this.api = api.TrimEnd('/'); }
     public override string Label => label;
 
     public override async Task<ModFile?> FindAsync(string id, string mc, CancellationToken ct)
@@ -40,9 +40,9 @@ public sealed class ModrinthSource : ModSource
         var f = files.FirstOrDefault(x => x.TryGetProperty("primary", out var p) && p.GetBoolean());
         if (f.ValueKind != JsonValueKind.Object) f = files[0];
         var fileUrl = f.GetProperty("url").GetString()!;
-        string? alt = null;
-        if (cdnFrom != "" && fileUrl.StartsWith(cdnFrom)) fileUrl = cdnTo + fileUrl[cdnFrom.Length..];
-        else if (cdnFrom == "" && fileUrl.StartsWith("https://cdn.modrinth.com")) alt = "https://mod.mcimirror.top" + fileUrl["https://cdn.modrinth.com".Length..];
+        if (!Uri.TryCreate(fileUrl, UriKind.Absolute, out var safe)
+            || safe.Scheme != Uri.UriSchemeHttps || safe.Host != "cdn.modrinth.com")
+            throw new InvalidDataException("Modrinth returned a file outside its official CDN.");
 
         var hashes = f.GetProperty("hashes");
         var deps = new List<string>();
@@ -52,7 +52,7 @@ public sealed class ModrinthSource : ModSource
                 && d.TryGetProperty("project_id", out var pid) && pid.ValueKind == JsonValueKind.String)
                 deps.Add(pid.GetString()!);
         }
-        return new ModFile(f.GetProperty("filename").GetString()!, fileUrl, alt,
+        return new ModFile(f.GetProperty("filename").GetString()!, fileUrl, null,
             hashes.TryGetProperty("sha512", out var h5) ? h5.GetString() : null,
             hashes.TryGetProperty("sha1", out var h1) ? h1.GetString() : null,
             best.GetProperty("project_id").GetString()!, label, deps);
@@ -189,7 +189,7 @@ public sealed class ModManager
                 lostDependency = true;
             }
         SaveMan();
-        const int MaxMods = 12;
+        const int MaxMods = 24;
         int CountJars() => Directory.GetFiles(dir, "*.jar").Length;
         var completeFile = Path.Combine(dir, ".lt6ms-mods-ready.txt");
         var expectedMods = string.Join("|", Const.Mods(mc));
@@ -215,46 +215,13 @@ public sealed class ModManager
             return await source.FindAsync(id, mc, requestCts.Token);
         }
 
-        // 1. свои jar-ы рядом с exe: mods_bundle/<версия>/ или mods_bundle/
-        var bundleNames = new List<string>();
-        foreach (var b in new[] { Path.Combine(AppContext.BaseDirectory, "mods_bundle", mc), Path.Combine(AppContext.BaseDirectory, "mods_bundle") })
-        {
-            if (!Directory.Exists(b)) continue;
-            foreach (var j in Directory.GetFiles(b, "*.jar"))
-            {
-                var dst = Path.Combine(dir, Path.GetFileName(j));
-                if (!File.Exists(dst))
-                {
-                    if (CountJars() >= MaxMods) throw new InvalidOperationException("Лимит 12 модов: проверьте mods_bundle и папку mods.");
-                    File.Copy(j, dst);
-                }
-                bundleNames.Add(Path.GetFileName(j).ToLowerInvariant().Replace("-", "").Replace("_", ""));
-            }
-        }
-
-        // 2. индекс из GitHub Release
-        ReleaseIndex? rel = null;
-        var relBase = $"https://github.com/{Const.Repo}/releases/download/mods-{mc}/";
-        try
-        {
-            status("Проверяю релиз с модами...");
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(4));
-            var js = await http.GetStringAsync(relBase + "index.json", cts.Token);
-            rel = JsonSerializer.Deserialize<ReleaseIndex>(js, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        }
-        catch (Exception e) { Log.W("release index: " + e.Message); }
-
-        // 3. онлайн-источники: Modrinth (если доступен), зеркало MCIM, CurseForge
-        status("Проверяю связь с Modrinth...");
-        bool mrUp = await Ping("https://api.modrinth.com/v2/", 3);
-        var sources = new List<ModSource>();
-        if (mrUp) sources.Add(new ModrinthSource(http, "Modrinth", "https://api.modrinth.com"));
-        sources.Add(new ModrinthSource(http, "MCIM", "https://mod.mcimirror.top/modrinth", "https://cdn.modrinth.com", "https://mod.mcimirror.top"));
-        CurseForgeSource? cf = null;
-        if (cfg.CurseForgeKey != "") sources.Add(cf = new CurseForgeSource(http, "CurseForge", "https://api.curseforge.com", cfg.CurseForgeKey, false));
-        sources.Add(cf ??= new CurseForgeSource(http, "CurseForge (MCIM)", "https://mod.mcimirror.top/curseforge", "", true));
-        Log.W($"моды {mc}: release={(rel != null)}, modrinth={mrUp}");
+        // Only the official source is allowed. Existing cached, installed jars
+        // are reused, but new mod downloads must come from the Modrinth API.
+        status("Загружаю моды только с Modrinth...");
+        var sources = new List<ModSource> {
+            new ModrinthSource(http, "Modrinth", "https://api.modrinth.com")
+        };
+        Log.W("Mod downloads: official api.modrinth.com / cdn.modrinth.com only");
 
         var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var pending = new Queue<string>();
@@ -266,7 +233,7 @@ public sealed class ModManager
             var path = Path.Combine(dir, f.Name);
             if (!File.Exists(path))
             {
-                if (CountJars() >= MaxMods) throw new InvalidOperationException("Лимит 12 модов: удалите лишние пользовательские моды или пересмотрите зависимости.");
+                if (CountJars() >= MaxMods) throw new InvalidOperationException("Лимит 24 модов: удалите лишние пользовательские моды или пересмотрите зависимости.");
                 await Download(f, path, ct);
             }
             if (man.TryGetValue(key, out var old) && old != f.Name) { try { File.Delete(Path.Combine(dir, old)); } catch { } }
@@ -281,20 +248,7 @@ public sealed class ModManager
             ct.ThrowIfCancellationRequested();
             done.Add(slug);
             if (man.TryGetValue(slug, out var have) && File.Exists(Path.Combine(dir, have))) { row(new ModRow { Name = slug, State = "установлен", Dot = Green }); continue; }
-            if (bundleNames.Any(n => n.Contains(slug.Replace("-", "")))) { row(new ModRow { Name = slug, State = "из mods_bundle", Dot = Green }); continue; }
-
-            status($"Мод {slug}...");
-            try
-            {
-                if (rel != null && rel.Mods.TryGetValue(slug, out var rf))
-                {
-                    await Install(slug, new ModFile(rf, relBase + Uri.EscapeDataString(rf), null, null, null, slug, "Release", new()), "Release");
-                    row(new ModRow { Name = slug, State = "скачан (Release)", Dot = Blue });
-                    continue;
-                }
-            }
-            catch (Exception e) { Log.W($"release {slug}: {e.Message}"); }
-
+            status($"Мод {slug} — Modrinth...");
             ModFile? file = null;
             foreach (var src in sources)
             {
@@ -312,16 +266,10 @@ public sealed class ModManager
                 foreach (var d in file.Deps) pending.Enqueue(d);
                 row(new ModRow { Name = slug, State = "скачан (" + file.Source + ")", Dot = Blue });
             }
-            else { missing++; row(new ModRow { Name = slug, State = "не найден", Dot = Red }); }
+            else { missing++; row(new ModRow { Name = slug, State = "Modrinth недоступен", Dot = Red }); }
         }
 
         // обязательные зависимости
-        if (rel != null)
-            foreach (var (s, fn) in rel.Deps)
-            {
-                try { if (!(man.TryGetValue("dep:" + s, out var h) && File.Exists(Path.Combine(dir, h)))) await Install("dep:" + s, new ModFile(fn, relBase + Uri.EscapeDataString(fn), null, null, null, s, "Release", new()), "Release"); }
-                catch (Exception e) { depFailed = true; Log.W($"dep {s}: {e.Message}"); }
-            }
         int guard = 0;
         while (pending.Count > 0 && guard++ < 60)
         {
@@ -331,17 +279,9 @@ public sealed class ModManager
             status("Зависимость " + id + "...");
             try
             {
-                if (id.StartsWith("cf:") && cf != null)
-                {
-                    using var slugCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    slugCts.CancelAfter(TimeSpan.FromSeconds(3));
-                    var sl = await cf.SlugOf(id, slugCts.Token);
-                    if (sl != null && done.Contains(sl)) continue;
-                }
                 bool foundDependency = false;
                 foreach (var src in sources)
                 {
-                    if ((src is CurseForgeSource) != id.StartsWith("cf:")) continue;
                     var f = await FindQuick(src, id);
                     if (f == null) continue;
                     await Install("dep:" + id, f, src.Label);
@@ -369,10 +309,10 @@ public sealed class ModManager
     async Task Download(ModFile f, string path, CancellationToken ct)
     {
         Exception? last = null;
-        var urls = new[] { f.Url, f.Alt }
-            .Where(u => !string.IsNullOrWhiteSpace(u))
-            .Select(u => u!)
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (!Uri.TryCreate(f.Url, UriKind.Absolute, out var official)
+            || official.Scheme != Uri.UriSchemeHttps || official.Host != "cdn.modrinth.com")
+            throw new InvalidDataException("Mod JAR downloads must use the official Modrinth CDN.");
+        var urls = new[] { f.Url };
         // Сначала один раз пробуем каждый адрес. При ошибке переключаемся
         // на зеркало за 250 мс, а не трижды ждём один нерабочий сервер.
         for (int round = 0; round < 2; round++)
