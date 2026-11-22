@@ -124,7 +124,7 @@ public final class LT6Screen extends Screen {
                     m.enabled ? 0xFF70E1AD : 0xFF6C7888);
         }
 
-        Gfx.str(g, font, "Right Shift / ESC", x + 18, y + h - 22, 0xFF7F92A9);
+        Gfx.str(g, font, "Y / ESC", x + 18, y + h - 22, 0xFF7F92A9);
 
         Cfg.Module m = module();
         Gfx.str(g, font, LABELS[selected], contentX, y + 23, TEXT);
@@ -349,7 +349,7 @@ public final class LT6Screen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == GLFW.GLFW_KEY_RIGHT_SHIFT || event.key() == GLFW.GLFW_KEY_ESCAPE) {
+        if (event.key() == GLFW.GLFW_KEY_Y || event.key() == GLFW.GLFW_KEY_ESCAPE) {
             onClose();
             return true;
         }

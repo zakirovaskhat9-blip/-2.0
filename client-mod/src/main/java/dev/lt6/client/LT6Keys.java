@@ -21,7 +21,7 @@ public final class LT6Keys {
         openGui = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.lt6.open_gui",
                 InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_RIGHT_SHIFT,
+                GLFW.GLFW_KEY_Y,
                 CATEGORY));
     }
 

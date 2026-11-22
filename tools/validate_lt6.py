@@ -58,7 +58,7 @@ assert 'mc.getWindow().handle()' in (source/'Binds.java').read_text(encoding='ut
 assert 'require = 1' in (source/'mixin/HitColorMixin.java').read_text(encoding='utf8')
 assert '"Контраст", -100, 100' in cfg
 assert 'ColorFX.tick(mc)' in (source/'LT6Client.java').read_text(encoding='utf8')
-assert 'GLFW_KEY_RIGHT_SHIFT' in (source/'LT6Keys.java').read_text(encoding='utf8')
+assert 'GLFW_KEY_Y' in (source/'LT6Keys.java').read_text(encoding='utf8')
 csproj = (root/'Enchanted/Enchanted.csproj').read_text(encoding='utf8')
 assert 'client_mod/lt6.jar' in csproj
 assert 'sky_packs/*.zip' in csproj
