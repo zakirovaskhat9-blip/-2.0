@@ -36,7 +36,7 @@ for path in profiles:
     assert data['targets'] == {'swap': {}}
     assert len(data['passes']) == 2
     assert all(p['vertex_shader'] == 'minecraft:core/screenquad' for p in data['passes']), path
-    assert data['passes'][0]['fragment_shader'] == 'lt6:post/grading'
+    assert data['passes'][0]['fragment_shader'] == ('lt6:post/grading_live' if path.stem == 'live' else 'lt6:post/grading')
     inputs = data['passes'][0]['inputs']
     assert any(x.get('use_depth_buffer') for x in inputs), path
     assert data['passes'][1]['output'] == 'minecraft:main'
