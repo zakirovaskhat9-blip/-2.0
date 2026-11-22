@@ -17,14 +17,14 @@ import org.lwjgl.glfw.GLFW;
  * One click opens settings, a separate toggle turns each module on/off.
  */
 public final class LT6Screen extends Screen {
-    private static final int BG = 0xF0111724;
-    private static final int SIDE = 0xFF101827;
-    private static final int CARD = 0xFF202C3D;
+    private static final int BG = 0xF20D131E;
+    private static final int SIDE = 0xFF101A28;
+    private static final int CARD = 0xFF1B2A3C;
     private static final int TEXT = 0xFFF2F7FF;
     private static final int MUTED = 0xFF9AACC3;
     private static final int ACCENT = 0xFF62BEFF;
-    private static final String[] LABELS = {"FPS", "Target ESP", "Custom Sky", "Color Grading"};
-    private static final String[] SUBS = {"Счётчик кадров", "Три прежних стиля", "Шесть наборов неба", "Цвет и яркость"};
+    private static final String[] LABELS = {"FPS / HUD", "Target ESP", "Custom Sky", "Color Grading", "Hands", "Items"};
+    private static final String[] SUBS = {"Размер и позиция", "Три прежних стиля", "Шесть наборов неба", "Цвет и яркость", "Обе руки отдельно", "Оба предмета отдельно"};
 
     private record Hit(int x, int y, int w, int h, Runnable action) {
         boolean inside(double px, double py) {
@@ -40,6 +40,9 @@ public final class LT6Screen extends Screen {
     private Cfg.Module dragOwner;
     private int dragX, dragW;
     private boolean clip;
+    private boolean movingPanel, resizingPanel;
+    private double startMouseX, startMouseY, startPanelX, startPanelY;
+    private int startPanelWidth, startPanelHeight, startPixelX, startPixelY;
 
     public LT6Screen() {
         super(Component.literal("LT6 Visuals"));
@@ -47,7 +50,7 @@ public final class LT6Screen extends Screen {
 
     @Override
     protected void init() {
-        selected = Math.max(0, Math.min(3, selected));
+        selected = Math.max(0, Math.min(5, selected));
         Cfg.SKY_PRESET.opts = SkyLib.names();
         if (Cfg.SKY_PRESET.idx >= Cfg.SKY_PRESET.opts.length) Cfg.SKY_PRESET.idx = 0;
         scroll = 0;
@@ -58,7 +61,9 @@ public final class LT6Screen extends Screen {
             case 0 -> Cfg.FPS;
             case 1 -> Cfg.TARGET_ESP;
             case 2 -> Cfg.SKY;
-            default -> Cfg.GRADING;
+            case 3 -> Cfg.GRADING;
+            case 4 -> Cfg.HAND_VIEW;
+            default -> Cfg.ITEM_VIEW;
         };
     }
 
@@ -85,39 +90,39 @@ public final class LT6Screen extends Screen {
     public void render(GuiGraphics g, int mx, int my, float delta) {
         hits.clear();
         Gfx.alphaMul = 1f;
-        this.w = Math.min(686, Math.max(260, width - 20));
-        this.h = Math.min(438, Math.max(230, height - 20));
-        this.x = (width - w) / 2;
-        this.y = (height - h) / 2;
+        this.w = Math.max(1, Math.min(width - 16, (int)Cfg.UI_WIDTH.v));
+        this.h = Math.max(1, Math.min(height - 16, (int)Cfg.UI_HEIGHT.v));
+        this.x = (int)Math.round(Math.max(0, width - w) * Cfg.UI_X.v / 100.0);
+        this.y = (int)Math.round(Math.max(0, height - h) * Cfg.UI_Y.v / 100.0);
         this.sideW = Math.min(184, Math.max(124, w / 3));
         this.contentX = x + sideW + 20;
         this.contentW = Math.max(108, w - sideW - 38);
         this.viewTop = y + 98;
         this.viewBottom = y + h - 34;
 
-        g.fill(0, 0, width, height, 0xAE030812);
-        Gfx.glow(g, x, y, w, h, 11, 0x000000, 0.35f, 4);
+        g.fill(0, 0, width, height, 0xA9030912);
+        Gfx.glow(g, x, y, w, h, 11, 0x000000, 0.29f, 3);
         Gfx.rr(g, x, y, w, h, 11, BG);
         Gfx.rr(g, x + 1, y + 1, sideW, h - 2, 10, SIDE);
         Gfx.ring(g, x, y, w, h, 11, 1, 0x345B7DA2);
         Gfx.rr(g, x + 12, y + 17, 3, 24, 1, ACCENT);
         Gfx.str(g, font, "LT6", x + 25, y + 20, TEXT);
-        Gfx.str(g, font, "VISUAL CLIENT", x + 25, y + 34, MUTED);
+        Gfx.str(g, font, "LUNAR-STYLE VISUALS", x + 25, y + 34, MUTED);
         Gfx.str(g, font, "МОДУЛИ", x + 17, y + 76, MUTED);
 
-        Cfg.Module[] modules = {Cfg.FPS, Cfg.TARGET_ESP, Cfg.SKY, Cfg.GRADING};
+        Cfg.Module[] modules = {Cfg.FPS, Cfg.TARGET_ESP, Cfg.SKY, Cfg.GRADING, Cfg.HAND_VIEW, Cfg.ITEM_VIEW};
         for (int i = 0; i < modules.length; i++) {
             final int id = i;
             Cfg.Module m = modules[i];
-            int itemSpacing = Math.max(40, Math.min(61, (h - 144) / 4));
-            int sy = y + 94 + i * itemSpacing, sx = x + 10, sw = sideW - 18;
-            int itemHeight = Math.min(52, itemSpacing - 5);
+            int itemSpacing = Math.max(19, Math.min(52, (h - 128) / modules.length));
+            int sy = y + 91 + i * itemSpacing, sx = x + 10, sw = sideW - 18;
+            int itemHeight = Math.max(15, itemSpacing - 4);
             boolean active = selected == i;
             int fill = active ? 0xFF273F58 : hover(mx, my, sx, sy, sw, itemHeight) ? 0xFF1A2C3F : 0xFF142132;
             Gfx.rr(g, sx, sy, sw, itemHeight, 7, fill);
-            if (active) Gfx.rr(g, sx, sy + 7, 3, itemHeight - 14, 1, ACCENT);
-            Gfx.str(g, font, LABELS[i], sx + 11, sy + 10, active ? TEXT : 0xFFD5E3F5);
-            if (itemHeight >= 42) Gfx.str(g, font, Gfx.trim(font, SUBS[i], sw - 24), sx + 11, sy + 28, MUTED);
+            if (active) Gfx.rr(g, sx, sy + 3, 3, itemHeight - 6, 1, ACCENT);
+            Gfx.str(g, font, LABELS[i], sx + 11, sy + (itemHeight < 30 ? 4 : 10), active ? TEXT : 0xFFD5E3F5);
+            if (itemHeight >= 44) Gfx.str(g, font, Gfx.trim(font, SUBS[i], sw - 24), sx + 11, sy + 28, MUTED);
             area(sx, sy, sw, itemHeight, () -> {
                 selected = id;
                 scroll = 0;
@@ -127,7 +132,7 @@ public final class LT6Screen extends Screen {
                     m.enabled ? 0xFF70E1AD : 0xFF6C7888);
         }
 
-        Gfx.str(g, font, "Y / ESC", x + 18, y + h - 22, 0xFF7F92A9);
+        Gfx.str(g, font, "Y / ESC  |  ДВИГАЙ ЗАГОЛОВОК", x + 12, y + h - 22, 0xFF7F92A9);
 
         Cfg.Module m = module();
         Gfx.str(g, font, LABELS[selected], contentX, y + 23, TEXT);
@@ -147,7 +152,8 @@ public final class LT6Screen extends Screen {
         if (selected == 0) yy = renderFPS(g, mx, my, yy, m);
         else if (selected == 1) yy = renderESP(g, mx, my, yy, m);
         else if (selected == 2) yy = renderSky(g, mx, my, yy, m);
-        else yy = renderGrading(g, mx, my, yy, m);
+        else if (selected == 3) yy = renderGrading(g, mx, my, yy, m);
+        else yy = renderViewmodel(g, yy, selected == 4, m);
         contentHeight = Math.max(0, yy + (int)scroll - viewTop + 8);
         g.disableScissor();
         clip = false;
@@ -159,11 +165,16 @@ public final class LT6Screen extends Screen {
             Gfx.rr(g, trackX, viewTop, 3, view, 1, 0x365D718A);
             Gfx.rr(g, trackX, top, 3, thumb, 1, ACCENT);
         }
-        Gfx.str(g, font, "Изменения сохраняются автоматически", contentX, y + h - 21, 0xFF7F92A9);
+        Gfx.str(g, font, "Автосохранение  |  размер: правый угол", contentX, y + h - 21, 0xFF7F92A9);
+        Gfx.rr(g, x + w - 18, y + h - 18, 13, 13, 2, 0xFF31455D);
+        g.fill(x + w - 14, y + h - 11, x + w - 8, y + h - 9, ACCENT);
     }
 
     private int renderFPS(GuiGraphics g, int mx, int my, int yy, Cfg.Module m) {
+        yy = note(g, yy, "В чате (T) перетаскивай FPS мышью");
         yy = slider(g, yy, Cfg.FPS_SIZE, m);
+        yy = slider(g, yy, Cfg.FPS_POS_X, m);
+        yy = slider(g, yy, Cfg.FPS_POS_Y, m);
         int panelHeight = 92;
         Gfx.rr(g, contentX, yy, contentW, panelHeight, 7, CARD);
         Gfx.str(g, font, "ПРЕДПРОСМОТР", contentX + 13, yy + 12, MUTED);
@@ -270,6 +281,23 @@ public final class LT6Screen extends Screen {
         yy = slider(g, yy, Cfg.GRADE_SATURATION, m);
         yy = slider(g, yy, Cfg.GRADE_VIBRANCE, m);
         yy = slider(g, yy, Cfg.GRADE_INTENSITY, m);
+        return yy;
+    }
+
+    private int renderViewmodel(GuiGraphics g, int yy, boolean hands, Cfg.Module module) {
+        yy = note(g, yy, "В чате (T): тяни метки; колесо = размер");
+        Gfx.str(g, font, "ОСНОВНАЯ РУКА / ПРЕДМЕТ", contentX + 6, yy + 3, MUTED);
+        yy += 22;
+        Cfg.Slider[] main = hands
+                ? new Cfg.Slider[]{Cfg.MAIN_HAND_SIZE, Cfg.MAIN_HAND_X, Cfg.MAIN_HAND_Y, Cfg.MAIN_HAND_Z}
+                : new Cfg.Slider[]{Cfg.ITEM_VIEW_SIZE, Cfg.ITEM_VIEW_X, Cfg.ITEM_VIEW_Y, Cfg.ITEM_VIEW_Z};
+        for (Cfg.Slider s : main) yy = slider(g, yy, s, module);
+        Gfx.str(g, font, "ВТОРАЯ РУКА / ПРЕДМЕТ", contentX + 6, yy + 3, MUTED);
+        yy += 22;
+        Cfg.Slider[] off = hands
+                ? new Cfg.Slider[]{Cfg.OFF_HAND_SIZE, Cfg.OFF_HAND_X, Cfg.OFF_HAND_Y, Cfg.OFF_HAND_Z}
+                : new Cfg.Slider[]{Cfg.ITEM_OFF_SIZE, Cfg.ITEM_OFF_X, Cfg.ITEM_OFF_Y, Cfg.ITEM_OFF_Z};
+        for (Cfg.Slider s : off) yy = slider(g, yy, s, module);
         return yy;
     }
 
