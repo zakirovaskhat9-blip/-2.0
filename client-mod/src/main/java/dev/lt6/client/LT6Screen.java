@@ -13,7 +13,7 @@ import org.lwjgl.glfw.GLFW;
 
 /**
  * LT6: a lightweight, responsive, dark Lunar-inspired menu.
- * Exactly three user-facing modules: FPS, Target ESP and Custom Sky.
+ * FPS, three Target ESP styles, Custom Sky and live GPU Color Grading.
  * One click opens settings, a separate toggle turns each module on/off.
  */
 public final class LT6Screen extends Screen {
@@ -23,8 +23,8 @@ public final class LT6Screen extends Screen {
     private static final int TEXT = 0xFFF2F7FF;
     private static final int MUTED = 0xFF9AACC3;
     private static final int ACCENT = 0xFF62BEFF;
-    private static final String[] LABELS = {"FPS", "Target ESP", "Custom Sky"};
-    private static final String[] SUBS = {"Счётчик кадров", "Три прежних стиля", "Шесть наборов неба"};
+    private static final String[] LABELS = {"FPS", "Target ESP", "Custom Sky", "Color Grading"};
+    private static final String[] SUBS = {"Счётчик кадров", "Три прежних стиля", "Шесть наборов неба", "Цвет и яркость"};
 
     private record Hit(int x, int y, int w, int h, Runnable action) {
         boolean inside(double px, double py) {
@@ -47,7 +47,7 @@ public final class LT6Screen extends Screen {
 
     @Override
     protected void init() {
-        selected = Math.max(0, Math.min(2, selected));
+        selected = Math.max(0, Math.min(3, selected));
         Cfg.SKY_PRESET.opts = SkyLib.names();
         if (Cfg.SKY_PRESET.idx >= Cfg.SKY_PRESET.opts.length) Cfg.SKY_PRESET.idx = 0;
         scroll = 0;
@@ -57,7 +57,8 @@ public final class LT6Screen extends Screen {
         return switch (selected) {
             case 0 -> Cfg.FPS;
             case 1 -> Cfg.TARGET_ESP;
-            default -> Cfg.SKY;
+            case 2 -> Cfg.SKY;
+            default -> Cfg.GRADING;
         };
     }
 
@@ -104,18 +105,20 @@ public final class LT6Screen extends Screen {
         Gfx.str(g, font, "VISUAL CLIENT", x + 25, y + 34, MUTED);
         Gfx.str(g, font, "МОДУЛИ", x + 17, y + 76, MUTED);
 
-        Cfg.Module[] modules = {Cfg.FPS, Cfg.TARGET_ESP, Cfg.SKY};
+        Cfg.Module[] modules = {Cfg.FPS, Cfg.TARGET_ESP, Cfg.SKY, Cfg.GRADING};
         for (int i = 0; i < modules.length; i++) {
             final int id = i;
             Cfg.Module m = modules[i];
-            int sy = y + 100 + i * 61, sx = x + 10, sw = sideW - 18;
+            int itemSpacing = Math.max(40, Math.min(61, (h - 144) / 4));
+            int sy = y + 94 + i * itemSpacing, sx = x + 10, sw = sideW - 18;
+            int itemHeight = Math.min(52, itemSpacing - 5);
             boolean active = selected == i;
-            int fill = active ? 0xFF273F58 : hover(mx, my, sx, sy, sw, 52) ? 0xFF1A2C3F : 0xFF142132;
-            Gfx.rr(g, sx, sy, sw, 52, 7, fill);
-            if (active) Gfx.rr(g, sx, sy + 10, 3, 32, 1, ACCENT);
+            int fill = active ? 0xFF273F58 : hover(mx, my, sx, sy, sw, itemHeight) ? 0xFF1A2C3F : 0xFF142132;
+            Gfx.rr(g, sx, sy, sw, itemHeight, 7, fill);
+            if (active) Gfx.rr(g, sx, sy + 7, 3, itemHeight - 14, 1, ACCENT);
             Gfx.str(g, font, LABELS[i], sx + 11, sy + 10, active ? TEXT : 0xFFD5E3F5);
-            Gfx.str(g, font, Gfx.trim(font, SUBS[i], sw - 24), sx + 11, sy + 28, MUTED);
-            area(sx, sy, sw, 52, () -> {
+            if (itemHeight >= 42) Gfx.str(g, font, Gfx.trim(font, SUBS[i], sw - 24), sx + 11, sy + 28, MUTED);
+            area(sx, sy, sw, itemHeight, () -> {
                 selected = id;
                 scroll = 0;
                 dragging = null;
@@ -143,7 +146,8 @@ public final class LT6Screen extends Screen {
         int yy = viewTop + 6 - (int) scroll;
         if (selected == 0) yy = renderFPS(g, mx, my, yy, m);
         else if (selected == 1) yy = renderESP(g, mx, my, yy, m);
-        else yy = renderSky(g, mx, my, yy, m);
+        else if (selected == 2) yy = renderSky(g, mx, my, yy, m);
+        else yy = renderGrading(g, mx, my, yy, m);
         contentHeight = Math.max(0, yy + (int)scroll - viewTop + 8);
         g.disableScissor();
         clip = false;
@@ -230,6 +234,45 @@ public final class LT6Screen extends Screen {
         return yy + 3 * 67 + 8;
     }
 
+
+    /**
+     * One-click presets plus independent manual controls, all effective on the
+     * next client tick. Scrolling keeps every control reachable in small GUIs.
+     */
+    private int renderGrading(GuiGraphics g, int mx, int my, int yy, Cfg.Module m) {
+        yy = note(g, yy, "Цветокоррекция мира через GPU");
+        Gfx.str(g, font, "РЕЖИМЫ", contentX + 6, yy + 2, MUTED);
+        yy += 18;
+        String[] modes = Cfg.GRADING_PRESET.opts;
+        int gap = 7;
+        int buttonWidth = Math.max(40, (contentW - gap) / 2);
+        for (int i = 0; i < modes.length; i++) {
+            final int mode = i;
+            int sx = contentX + (i % 2) * (buttonWidth + gap);
+            int sy = yy + (i / 2) * 40;
+            boolean active = Cfg.GRADING_PRESET.idx == i;
+            Gfx.rr(g, sx, sy, buttonWidth, 34, 6, active ? 0xFF285C85 : CARD);
+            Gfx.strC(g, font, Gfx.trim(font, modes[i], buttonWidth - 12),
+                    sx + buttonWidth / 2, sy + 12, active ? TEXT : MUTED);
+            if (active) Gfx.ring(g, sx, sy, buttonWidth, 34, 6, 1, ACCENT);
+            area(sx, sy, buttonWidth, 34, () -> {
+                Cfg.gradingPreset(mode);
+                Cfg.GRADING.enabled = true;
+                Cfg.changed(Cfg.GRADING);
+            });
+        }
+        yy += ((modes.length + 1) / 2) * 40 + 14;
+        Gfx.str(g, font, "РУЧНАЯ НАСТРОЙКА", contentX + 6, yy + 1, MUTED);
+        yy += 19;
+        yy = slider(g, yy, Cfg.GRADE_BRIGHTNESS, m);
+        yy = slider(g, yy, Cfg.GRADE_CONTRAST, m);
+        yy = slider(g, yy, Cfg.GRADE_WARMTH, m);
+        yy = slider(g, yy, Cfg.GRADE_SATURATION, m);
+        yy = slider(g, yy, Cfg.GRADE_VIBRANCE, m);
+        yy = slider(g, yy, Cfg.GRADE_INTENSITY, m);
+        return yy;
+    }
+
     private int note(GuiGraphics g, int yy, String value) {
         Gfx.rr(g, contentX, yy, contentW, 40, 6, 0xFF182839);
         Gfx.str(g, font, Gfx.trim(font, value, contentW - 18),
@@ -299,6 +342,10 @@ public final class LT6Screen extends Screen {
         if (dragging == null || dragOwner == null || dragW < 1) return;
         double fraction = Math.max(0d, Math.min(1d, (mouseX - dragX) / dragW));
         dragging.set(dragging.min + fraction * (dragging.max - dragging.min));
+        if (dragOwner == Cfg.GRADING) {
+            Cfg.GRADING_PRESET.idx = Cfg.GRADING_PRESET.opts.length - 1; // Custom
+            Cfg.GRADING.enabled = true;
+        }
     }
 
     @Override
