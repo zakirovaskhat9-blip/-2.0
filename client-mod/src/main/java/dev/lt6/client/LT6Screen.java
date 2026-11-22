@@ -387,6 +387,24 @@ public final class LT6Screen extends Screen {
                 return true;
             }
         }
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            startMouseX = event.x();
+            startMouseY = event.y();
+            startPanelX = Cfg.UI_X.v;
+            startPanelY = Cfg.UI_Y.v;
+            startPanelWidth = w;
+            startPanelHeight = h;
+            startPixelX = x;
+            startPixelY = y;
+            if (hover((int)event.x(), (int)event.y(), x + w - 24, y + h - 24, 24, 24)) {
+                resizingPanel = true;
+                return true;
+            }
+            if (hover((int)event.x(), (int)event.y(), x, y, w, 55)) {
+                movingPanel = true;
+                return true;
+            }
+        }
         return super.mouseClicked(event, doubleClick);
     }
 
@@ -394,6 +412,20 @@ public final class LT6Screen extends Screen {
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
         if (dragging != null) {
             updateSlider(event.x());
+            return true;
+        }
+        if (movingPanel) {
+            Cfg.UI_X.set(startPanelX + (event.x() - startMouseX) * 100.0 / Math.max(1, width - w));
+            Cfg.UI_Y.set(startPanelY + (event.y() - startMouseY) * 100.0 / Math.max(1, height - h));
+            return true;
+        }
+        if (resizingPanel) {
+            Cfg.UI_WIDTH.set(startPanelWidth + event.x() - startMouseX);
+            Cfg.UI_HEIGHT.set(startPanelHeight + event.y() - startMouseY);
+            int newWidth = Math.min(width - 16, (int)Cfg.UI_WIDTH.v);
+            int newHeight = Math.min(height - 16, (int)Cfg.UI_HEIGHT.v);
+            Cfg.UI_X.set(startPixelX * 100.0 / Math.max(1, width - newWidth));
+            Cfg.UI_Y.set(startPixelY * 100.0 / Math.max(1, height - newHeight));
             return true;
         }
         return super.mouseDragged(event, dx, dy);
@@ -406,6 +438,12 @@ public final class LT6Screen extends Screen {
             Cfg.changed(dragOwner);
             dragging = null;
             dragOwner = null;
+            return true;
+        }
+        if (movingPanel || resizingPanel) {
+            movingPanel = false;
+            resizingPanel = false;
+            Cfg.save();
             return true;
         }
         return super.mouseReleased(event);
@@ -439,6 +477,8 @@ public final class LT6Screen extends Screen {
     @Override
     public void onClose() {
         if (dragging != null) Cfg.changed(dragOwner);
+        movingPanel = false;
+        resizingPanel = false;
         Cfg.save();
         super.onClose();
     }
