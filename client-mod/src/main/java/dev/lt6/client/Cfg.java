@@ -162,7 +162,9 @@ public final class Cfg {
 	}
 
 	public static final Slider FPS_SIZE = new Slider("size", "Размер FPS", 0.5, 4.0, 0.1, 1.0, "x");
-	public static final Module FPS = new Module("fps", "FPS Counter", "Счётчик FPS с настраиваемым размером", HUD, true, FPS_SIZE);
+	public static final Slider FPS_POS_X = new Slider("pos_x", "FPS X", 0, 100, 0.1, 1, "%");
+	public static final Slider FPS_POS_Y = new Slider("pos_y", "FPS Y", 0, 100, 0.1, 1, "%");
+	public static final Module FPS = new Module("fps", "FPS Counter", "Счётчик FPS — размер и положение", HUD, true, FPS_SIZE, FPS_POS_X, FPS_POS_Y);
 	public static final Module PING = new Module("ping", "Ping Counter", "Текущий пинг до сервера в миллисекундах", HUD, false);
 
 	public static final Slider HEARTS_SIZE = new Slider("size", "Размер сердец", 0.6, 2.0, 0.1, 1.0, "x");
@@ -213,7 +215,11 @@ public final class Cfg {
 	static final Bool UI_GLOW = new Bool("glow", "Тени и свечение", false);
 	static final Bool UI_PART = new Bool("particles", "Частицы в меню", false);
 	static final Bool UI_BLUR = new Bool("blur", "Размытие меню", false);
-	static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR);
+	static final Slider UI_WIDTH = new Slider("panel_width", "Ширина меню", 300, 900, 10, 686, "px");
+	static final Slider UI_HEIGHT = new Slider("panel_height", "Высота меню", 240, 700, 10, 438, "px");
+	static final Slider UI_X = new Slider("panel_x", "Меню X", 0, 100, 0.1, 50, "%");
+	static final Slider UI_Y = new Slider("panel_y", "Меню Y", 0, 100, 0.1, 50, "%");
+	static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR, UI_WIDTH, UI_HEIGHT, UI_X, UI_Y);
 
 
     // Live GPU colour grading. Percentage sliders are applied independently;
@@ -257,7 +263,7 @@ public final class Cfg {
     }
 
     // Other older visuals remain disabled; new Color Grading has its own tab.
-    static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY, GRADING);
+    static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY, GRADING, HAND_VIEW, ITEM_VIEW);
 
 	static Options opts() { return Minecraft.getInstance().options; }
 
