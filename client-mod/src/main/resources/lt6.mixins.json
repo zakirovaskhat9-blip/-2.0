@@ -9,7 +9,8 @@
     "LT6PostEffectBridge",
     "FirstPersonViewMixin",
     "LT6PostChainAccess",
-    "LT6PostPassAccess"
+    "LT6PostPassAccess",
+    "LT6LoadingOverlayMixin"
   ],
   "injectors": {
     "defaultRequire": 0

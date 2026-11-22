@@ -16,7 +16,11 @@ public final class SkyPacks {
         "LT6_Akame.zip", "LT6_Violet.zip", "LT6_BlueMoon.zip"
     };
     private static boolean initialized;
+    private static volatile long silentUntil;
     private SkyPacks() { }
+
+    /** Hide the Mojang splash only during LT6 Custom Sky reloads. */
+    public static boolean isSilentReload() { return System.currentTimeMillis() < silentUntil; }
 
     public static void tick(Minecraft mc) {
         if (initialized || mc.player == null || mc.level == null) return;
@@ -42,9 +46,12 @@ public final class SkyPacks {
                 }
                 wanted.add(id); // highest-priority pack
             }
+            if (wanted.equals(new ArrayList<>(repo.getSelectedIds()))) return;
             repo.setSelected(wanted);
             mc.options.updateResourcePacks(repo);
+            silentUntil = System.currentTimeMillis() + 90_000L;
             mc.reloadResourcePacks().whenComplete((v, error) -> {
+                silentUntil = System.currentTimeMillis() + 2500L;
                 if (error != null) LOGGER.error("LT6 sky pack reload failed", error);
                 else LOGGER.info("LT6 sky resource pack: {}", enabled ? FILES[Math.floorMod(index, FILES.length)] : "disabled");
             });
