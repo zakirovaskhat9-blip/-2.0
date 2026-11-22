@@ -28,7 +28,7 @@ check(manifest['entrypoints'].get('client') == ['dev.lt6.client.LT6Client'], 'Mi
 check(manifest['environment'] == 'client', 'This LT6 build must be client-only')
 check(manifest['depends'].get('minecraft') == '~1.21.11', 'Wrong Minecraft version')
 check((JAVA / 'LT6Client.java').is_file(), 'LT6 client initializer source not found')
-check('GLFW_KEY_RIGHT_SHIFT' in (JAVA/'LT6Keys.java').read_text(encoding='utf-8'), 'Right Shift default missing')
+check('GLFW_KEY_Y' in (JAVA/'LT6Keys.java').read_text(encoding='utf-8'), 'Y key default missing')
 check('ClientTickEvents.END_CLIENT_TICK' in (JAVA/'LT6Client.java').read_text(encoding='utf-8'), 'Client tick hook missing')
 
 mix = json.loads((RES / 'lt6.mixins.json').read_text(encoding='utf-8'))
