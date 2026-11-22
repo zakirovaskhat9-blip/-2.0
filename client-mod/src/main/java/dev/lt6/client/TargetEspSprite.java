@@ -124,10 +124,10 @@ final class TargetEspSprite {
                 NativeImage out = new NativeImage(w, h, true);
                 for (int y = 0; y < h; y++) {
                     for (int x = 0; x < w; x++) {
-                        int a1 = (original.getPixelABGR(x, y) >>> 24) & 255;
-                        int a2 = (original.getPixelABGR(w - 1 - y, x) >>> 24) & 255;
-                        int a3 = (original.getPixelABGR(w - 1 - x, h - 1 - y) >>> 24) & 255;
-                        int a4 = (original.getPixelABGR(y, h - 1 - x) >>> 24) & 255;
+                        int a1 = (original.getPixel(x, y) >>> 24) & 255;
+                        int a2 = (original.getPixel(w - 1 - y, x) >>> 24) & 255;
+                        int a3 = (original.getPixel(w - 1 - x, h - 1 - y) >>> 24) & 255;
+                        int a4 = (original.getPixel(y, h - 1 - x) >>> 24) & 255;
                         int a = (a1 + a2 + a3 + a4 + 2) / 4;
                         out.setPixelABGR(x, y, (a << 24) | 0x00FFFFFF);
                     }
