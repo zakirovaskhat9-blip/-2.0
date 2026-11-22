@@ -5,7 +5,7 @@ using System.Windows.Media;
 
 namespace Enchanted;
 
-public sealed record ModFile(string Name, string Url, string? Alt, string? Sha512, string? Sha1, string ProjectId, string Source, List<string> Deps);
+public sealed record ModFile(string Name, string Url, string? Sha512, string? Sha1, string ProjectId, string Source, List<string> Deps);
 
 public abstract class ModSource
 {
@@ -52,85 +52,11 @@ public sealed class ModrinthSource : ModSource
                 && d.TryGetProperty("project_id", out var pid) && pid.ValueKind == JsonValueKind.String)
                 deps.Add(pid.GetString()!);
         }
-        return new ModFile(f.GetProperty("filename").GetString()!, fileUrl, null,
+        return new ModFile(f.GetProperty("filename").GetString()!, fileUrl,
             hashes.TryGetProperty("sha512", out var h5) ? h5.GetString() : null,
             hashes.TryGetProperty("sha1", out var h1) ? h1.GetString() : null,
             best.GetProperty("project_id").GetString()!, label, deps);
     }
-}
-
-/// <summary>CurseForge (нужен ключ в launcher.json) или его зеркало MCIM (mod.mcimirror.top/curseforge).</summary>
-public sealed class CurseForgeSource : ModSource
-{
-    readonly HttpClient http;
-    readonly string api, key, label;
-    readonly bool mirror;
-    public CurseForgeSource(HttpClient http, string label, string api, string key, bool mirror)
-    { this.http = http; this.label = label; this.api = api.TrimEnd('/'); this.key = key; this.mirror = mirror; }
-    public override string Label => label;
-
-    async Task<JsonDocument?> Get(string path, CancellationToken ct)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Get, api + path);
-        if (key != "") req.Headers.TryAddWithoutValidation("x-api-key", key);
-        using var res = await http.SendAsync(req, ct);
-        if (!res.IsSuccessStatusCode) return null;
-        return JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-    }
-
-    public async Task<string?> SlugOf(string cfId, CancellationToken ct)
-    {
-        using var d = await Get("/v1/mods/" + cfId[3..], ct);
-        return d?.RootElement.GetProperty("data").GetProperty("slug").GetString();
-    }
-
-    public override async Task<ModFile?> FindAsync(string idOrSlug, string mc, CancellationToken ct)
-    {
-        string modId;
-        if (idOrSlug.StartsWith("cf:")) modId = idOrSlug[3..];
-        else
-        {
-            using var s = await Get($"/v1/mods/search?gameId=432&classId=6&slug={Uri.EscapeDataString(idOrSlug)}", ct);
-            var hit = s?.RootElement.GetProperty("data").EnumerateArray()
-                .FirstOrDefault(m => m.GetProperty("slug").GetString() == idOrSlug);
-            if (hit == null || hit.Value.ValueKind != JsonValueKind.Object) return null;
-            modId = hit.Value.GetProperty("id").GetInt32().ToString();
-        }
-        using var fl = await Get($"/v1/mods/{modId}/files?gameVersion={mc}&modLoaderType=4&pageSize=20", ct);
-        if (fl == null) return null;
-        var best = fl.RootElement.GetProperty("data").EnumerateArray()
-            .OrderBy(f => f.GetProperty("releaseType").GetInt32() == 1 ? 0 : 1)
-            .ThenByDescending(f => f.GetProperty("fileDate").GetString())
-            .FirstOrDefault();
-        if (best.ValueKind != JsonValueKind.Object) return null;
-
-        int fid = best.GetProperty("id").GetInt32();
-        string name = best.GetProperty("fileName").GetString()!;
-        string? url = best.TryGetProperty("downloadUrl", out var du) && du.ValueKind == JsonValueKind.String ? du.GetString() : null;
-        url ??= $"https://edge.forgecdn.net/files/{fid / 1000}/{fid % 1000}/{name}";
-        string? alt = null;
-        foreach (var host in new[] { "https://edge.forgecdn.net", "https://mediafilez.forgecdn.net" })
-        {
-            if (!url.StartsWith(host)) continue;
-            var m = "https://mod.mcimirror.top" + url[host.Length..];
-            if (mirror) url = m; else alt = m;
-            break;
-        }
-        string? sha1 = null;
-        foreach (var h in best.GetProperty("hashes").EnumerateArray())
-            if (h.GetProperty("algo").GetInt32() == 1) sha1 = h.GetProperty("value").GetString();
-        var deps = new List<string>();
-        foreach (var d in best.GetProperty("dependencies").EnumerateArray())
-            if (d.GetProperty("relationType").GetInt32() == 3) deps.Add("cf:" + d.GetProperty("modId").GetInt32());
-        return new ModFile(name, url, alt, null, sha1, "cf:" + modId, label, deps);
-    }
-}
-
-/// <summary>Моды, заранее скачанные workflow "Fetch mods" в GitHub Release mods-&lt;версия&gt;.</summary>
-public sealed class ReleaseIndex
-{
-    public Dictionary<string, string> Mods { get; set; } = new();
-    public Dictionary<string, string> Deps { get; set; } = new();
 }
 
 public sealed class ModManager
