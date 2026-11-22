@@ -7,7 +7,9 @@
     "HitColorMixin",
     "HitArmorMixin",
     "LT6PostEffectBridge",
-    "FirstPersonViewMixin"
+    "FirstPersonViewMixin",
+    "LT6PostChainAccess",
+    "LT6PostPassAccess"
   ],
   "injectors": {
     "defaultRequire": 0

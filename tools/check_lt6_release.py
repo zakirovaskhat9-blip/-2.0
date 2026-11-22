@@ -52,6 +52,11 @@ for required in ('#version 330', 'InSampler', 'DepthSampler', 'GradingConfig', '
 check('GL_ARB_separate_shader_objects : require' not in post, 'Unsupported mandatory GLSL extension')
 profiles = sorted(SHADERS.glob('s*_w*.json'))
 check(len(profiles) == 21*11, 'Expected 231 gradient profiles')
+live = SHADERS / 'live.json'
+check(live.is_file(), 'Live grading profile missing')
+live_config = json.loads(live.read_text(encoding='utf-8'))
+check(live_config['passes'][0]['fragment_shader'] == 'lt6:post/grading_live', 'Live grading shader missing')
+check(len(live_config['passes'][0]['uniforms']['GradingConfig']) == 2, 'Six live grading controls need 2 vec4s')
 for item in profiles:
     data = json.loads(item.read_text(encoding='utf-8'))
     check(data['targets'] == {'swap': {}}, f'Bad targets: {item.name}')

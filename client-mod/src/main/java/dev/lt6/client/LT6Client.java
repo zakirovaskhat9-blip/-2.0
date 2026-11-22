@@ -14,7 +14,7 @@ import net.minecraft.client.Minecraft;
 public final class LT6Client implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        org.slf4j.LoggerFactory.getLogger("LT6").info("LT6 client initialized; GUI key defaults to Right Shift (see Minecraft Controls > Key Binds > LT6)");
+        org.slf4j.LoggerFactory.getLogger("LT6").info("LT6 client initialized; GUI key defaults to Y (see Minecraft Controls > Key Binds > LT6)");
         Cfg.load();
         LT6Keys.register();
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("lt6", "hud"), (gui, dt) -> {

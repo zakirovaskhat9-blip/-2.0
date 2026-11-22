@@ -28,7 +28,9 @@ assert '#version 330' in code and 'GL_ARB_separate_shader_objects : require' not
 for keyword in ['DepthSampler', 'ColorTuning', 'texture(InSampler', 'fragColor']:
     assert keyword in code, keyword
 profiles = sorted((res/'assets/lt6/post_effect/grading').glob('*.json'))
-assert len(profiles) == 21*11, len(profiles)
+assert len(profiles) == 21*11 + 1, len(profiles)
+assert (res/'assets/lt6/shaders/post/grading_live.fsh').is_file()
+assert (res/'assets/lt6/post_effect/grading/live.json').is_file()
 for path in profiles:
     data = json.loads(path.read_text(encoding='utf8'))
     assert data['targets'] == {'swap': {}}
@@ -38,8 +40,12 @@ for path in profiles:
     inputs = data['passes'][0]['inputs']
     assert any(x.get('use_depth_buffer') for x in inputs), path
     assert data['passes'][1]['output'] == 'minecraft:main'
-    tune = data['passes'][0]['uniforms']['GradingConfig'][0]['value']
+    values = data['passes'][0]['uniforms']['GradingConfig']
+    tune = values[0]['value']
     assert len(tune) == 4 and 0 <= tune[0] <= 3.0 and 0.85 <= tune[1] <= 1.5 and -1 <= tune[2] <= 1
+    if path.stem == 'live':
+        assert data['passes'][0]['fragment_shader'] == 'lt6:post/grading_live'
+        assert len(values) == 2 and values[1]['name'] == 'ExtraTuning'
 
 names = {'LT6_Clouds.zip','LT6_Green.zip','LT6_Teal.zip','LT6_Akame.zip','LT6_Violet.zip','LT6_BlueMoon.zip'}
 actual = {p.name for p in skies.glob('LT6_*.zip')}

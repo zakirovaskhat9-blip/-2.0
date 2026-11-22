@@ -215,8 +215,49 @@ public final class Cfg {
 	static final Bool UI_BLUR = new Bool("blur", "Размытие меню", false);
 	static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR);
 
-	// Only these three features are exposed or persisted by the simplified LT6 client.
-	static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY);
+
+    // Live GPU colour grading. Percentage sliders are applied independently;
+    // changing any slider switches from a preset to Custom.
+    public static final Choice GRADING_PRESET = new Choice("preset", "Режим", 0,
+            "Обычный", "Яркий", "Тёплый", "Холодный", "Сочный", "Мягкий",
+            "Кино", "Pulse", "Lunar", "Свой");
+    public static final Slider GRADE_BRIGHTNESS = new Slider("brightness", "Яркость", 0.5, 2.0, 0.05, 1.0, "x");
+    public static final Slider GRADE_CONTRAST = new Slider("contrast", "Контраст", 0.5, 2.0, 0.05, 1.0, "x");
+    public static final Slider GRADE_WARMTH = new Slider("warmth", "Теплота", -100, 100, 5, 0, "%");
+    public static final Slider GRADE_SATURATION = new Slider("saturation", "Насыщенность", 0, 200, 5, 100, "%");
+    public static final Slider GRADE_VIBRANCE = new Slider("vibrance", "Сочность", 0, 200, 5, 100, "%");
+    public static final Slider GRADE_INTENSITY = new Slider("intensity", "Сила эффекта", 0, 100, 5, 100, "%");
+    public static final Module GRADING = new Module("color_grading", "Color Grading",
+            "GPU-коррекция цвета в реальном времени", VIS, false,
+            GRADING_PRESET, GRADE_BRIGHTNESS, GRADE_CONTRAST, GRADE_WARMTH,
+            GRADE_SATURATION, GRADE_VIBRANCE, GRADE_INTENSITY);
+
+    /** Apply one complete preset. The final "Свой" entry keeps manual values. */
+    static void gradingPreset(int mode) {
+        int index = Math.max(0, Math.min(GRADING_PRESET.opts.length - 1, mode));
+        GRADING_PRESET.idx = index;
+        if (index == GRADING_PRESET.opts.length - 1) return;
+        double[][] modes = {
+                {1.00, 1.00,   0, 100, 100, 100}, // Обычный
+                {1.20, 1.12,   5, 120, 110, 100}, // Яркий
+                {1.07, 1.13,  55, 113, 108, 100}, // Тёплый
+                {1.06, 1.14, -60, 115, 108, 100}, // Холодный
+                {1.07, 1.19,  10, 160, 138, 100}, // Сочный
+                {1.05, 0.85,   0,  88,  84, 100}, // Мягкий
+                {0.92, 1.30, -10,  90,  95, 100}, // Кино
+                {1.15, 1.30,  15, 170, 140, 100}, // Pulse
+                {1.10, 1.11,   0, 125, 115, 100}  // Lunar
+        };
+        double[] settings = modes[index];
+        Slider[] sliders = {
+                GRADE_BRIGHTNESS, GRADE_CONTRAST, GRADE_WARMTH,
+                GRADE_SATURATION, GRADE_VIBRANCE, GRADE_INTENSITY
+        };
+        for (int i = 0; i < sliders.length; i++) sliders[i].set(settings[i]);
+    }
+
+    // Other older visuals remain disabled; new Color Grading has its own tab.
+    static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY, GRADING);
 
 	static Options opts() { return Minecraft.getInstance().options; }
 
