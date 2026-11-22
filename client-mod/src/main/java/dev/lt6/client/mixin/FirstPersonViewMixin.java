@@ -56,8 +56,12 @@ public abstract class FirstPersonViewMixin {
         if (mode != ItemDisplayContext.FIRST_PERSON_LEFT_HAND
                 && mode != ItemDisplayContext.FIRST_PERSON_RIGHT_HAND) return;
         pose.pushPose();
-        pose.translate(Cfg.ITEM_VIEW_X.v, Cfg.ITEM_VIEW_Y.v, Cfg.ITEM_VIEW_Z.v);
-        float scale = (float)Cfg.ITEM_VIEW_SIZE.v;
+        boolean main = mode == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND;
+        double x = main ? Cfg.ITEM_VIEW_X.v : Cfg.ITEM_OFF_X.v;
+        double y = main ? Cfg.ITEM_VIEW_Y.v : Cfg.ITEM_OFF_Y.v;
+        double z = main ? Cfg.ITEM_VIEW_Z.v : Cfg.ITEM_OFF_Z.v;
+        float scale = (float)(main ? Cfg.ITEM_VIEW_SIZE.v : Cfg.ITEM_OFF_SIZE.v);
+        pose.translate(x, y, z);
         pose.scale(scale, scale, scale);
     }
 

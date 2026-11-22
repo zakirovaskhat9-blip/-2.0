@@ -188,8 +188,12 @@ public final class Cfg {
 	public static final Slider ITEM_VIEW_X = new Slider("item_x", "Предмет: X", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_VIEW_Y = new Slider("item_y", "Предмет: Y", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_VIEW_Z = new Slider("item_z", "Предмет: Z", -1.5, 1.5, 0.05, 0, "");
-	public static final Module ITEM_VIEW = new Module("item_view", "Viewmodel Items", "Независимый размер и положение предметов в руках", VIS, false,
-		ITEM_VIEW_SIZE, ITEM_VIEW_X, ITEM_VIEW_Y, ITEM_VIEW_Z);
+	public static final Slider ITEM_OFF_SIZE = new Slider("off_item_scale", "Предмет слева: размер", 0.3, 2.5, 0.05, 1, "x");
+	public static final Slider ITEM_OFF_X = new Slider("off_item_x", "Предмет слева: X", -1.5, 1.5, 0.05, 0, "");
+	public static final Slider ITEM_OFF_Y = new Slider("off_item_y", "Предмет слева: Y", -1.5, 1.5, 0.05, 0, "");
+	public static final Slider ITEM_OFF_Z = new Slider("off_item_z", "Предмет слева: Z", -1.5, 1.5, 0.05, 0, "");
+	public static final Module ITEM_VIEW = new Module("item_view", "Viewmodel Items", "Настройка предметов отдельно для каждой руки", VIS, false,
+		ITEM_VIEW_SIZE, ITEM_VIEW_X, ITEM_VIEW_Y, ITEM_VIEW_Z, ITEM_OFF_SIZE, ITEM_OFF_X, ITEM_OFF_Y, ITEM_OFF_Z);
 
 	public static final Color HIT_TINT = new Color("color", "Цвет попадания", 1);
 	public static final Slider HIT_SIZE = new Slider("size", "Размер частиц", 0.5, 2.5, 0.1, 1.0, "x");
