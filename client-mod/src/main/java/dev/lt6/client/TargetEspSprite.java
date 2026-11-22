@@ -1,6 +1,8 @@
 package dev.lt6.client;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import java.io.IOException;
+import java.io.InputStream;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -25,15 +27,18 @@ final class TargetEspSprite {
     private static final Identifier BLOOM_ID =
             Identifier.fromNamespaceAndPath("lt6", "generated/target_esp_bloom");
     // Faithful alpha silhouette extracted from the user's supplied image.
-    private static final Identifier DIAMOND_CORE =
+    private static final Identifier DIAMOND_ORIGINAL =
             Identifier.fromNamespaceAndPath("lt6", "textures/gui/nursultan_target_esp.png");
+    private static final Identifier DIAMOND_CORE =
+            Identifier.fromNamespaceAndPath("lt6", "generated/target_esp_nursultan_symmetric");
+    private static boolean diamondReady;
 
     // Standard style: two strokes per chevron, top/right/bottom/left.
     private static final double[][] SEGMENTS = {
-            {-13, -23,   0, -36}, {0, -36,   13, -23},
-            {23, -13,   36,   0}, {36,   0,   23,  13},
-            {-13, 23,    0,  36}, {0,  36,   13,  23},
-            {-23,-13,  -36,   0}, {-36, 0,  -23,  13}
+            {-14, -22,    0, -36}, { 0, -36,  14, -22},
+            { 22, -14,   36,   0}, {36,   0,  22,  14},
+            {-14,  22,    0,  36}, { 0,  36,  14,  22},
+            {-22, -14,  -36,   0}, {-36, 0, -22,  14}
     };
 
     private static boolean initialized;
@@ -44,18 +49,20 @@ final class TargetEspSprite {
     static void render(GuiGraphics graphics, int argb, float opacity, double bloomPercent, int style) {
         float glow = (float) Math.max(0.0, Math.min(2.0, bloomPercent / 100.0));
         if (style == 1) {
-            // At 0% glow a single unmodified silhouette is displayed.
+            if (!initialized && !failed) initialize();
+            Identifier actualDiamond = diamondReady ? DIAMOND_CORE : DIAMOND_ORIGINAL;
+            // At 0% glow only the exact symmetric silhouette is displayed.
             // Optional halo uses only scaled copies of this same image, never a
             // different generated shape. The core stays sharp at any setting.
             if (glow > 0.01f) {
-                draw(graphics, DIAMOND_CORE,
+                draw(graphics, actualDiamond,
                         Gfx.a(argb, Math.min(1f, opacity * glow * 0.16f)),
                         DRAW_SIZE + 14, DIAMOND_TEXTURE_SIZE);
-                draw(graphics, DIAMOND_CORE,
+                draw(graphics, actualDiamond,
                         Gfx.a(argb, Math.min(1f, opacity * glow * 0.25f)),
                         DRAW_SIZE + 7, DIAMOND_TEXTURE_SIZE);
             }
-            draw(graphics, DIAMOND_CORE, Gfx.a(argb, opacity), DRAW_SIZE, DIAMOND_TEXTURE_SIZE);
+            draw(graphics, actualDiamond, Gfx.a(argb, opacity), DRAW_SIZE, DIAMOND_TEXTURE_SIZE);
             return;
         }
 
@@ -84,6 +91,12 @@ final class TargetEspSprite {
         try {
             register(CORE_ID, makeImage(false), "LT6 Standard core");
             register(BLOOM_ID, makeImage(true), "LT6 Standard bloom");
+            try {
+                register(DIAMOND_CORE, symmetricDiamond(), "LT6 symmetric Nursultan diamond");
+                diamondReady = true;
+            } catch (IOException | RuntimeException e) {
+                LOGGER.warn("Using original Nursultan texture until its symmetric version is available", e);
+            }
             initialized = true;
         } catch (RuntimeException e) {
             failed = true;
@@ -95,6 +108,33 @@ final class TargetEspSprite {
         DynamicTexture texture = new DynamicTexture(() -> description, image);
         Minecraft.getInstance().getTextureManager().register(id, texture);
         texture.upload();
+    }
+
+    /**
+     * Four-way rotational symmetry from the player's approved texture. Preserve
+     * antialiased edges; never redraw a new geometric diamond over the image.
+     */
+    private static NativeImage symmetricDiamond() throws IOException {
+        try (InputStream stream = TargetEspSprite.class.getResourceAsStream(
+                "/assets/lt6/textures/gui/nursultan_target_esp.png")) {
+            if (stream == null) throw new IOException("Nursultan texture not found");
+            try (NativeImage original = NativeImage.read(stream)) {
+                int w = original.getWidth(), h = original.getHeight();
+                if (w != h) throw new IOException("Nursultan sprite must be square");
+                NativeImage out = new NativeImage(w, h, true);
+                for (int y = 0; y < h; y++) {
+                    for (int x = 0; x < w; x++) {
+                        int a1 = (original.getPixelABGR(x, y) >>> 24) & 255;
+                        int a2 = (original.getPixelABGR(w - 1 - y, x) >>> 24) & 255;
+                        int a3 = (original.getPixelABGR(w - 1 - x, h - 1 - y) >>> 24) & 255;
+                        int a4 = (original.getPixelABGR(y, h - 1 - x) >>> 24) & 255;
+                        int a = (a1 + a2 + a3 + a4 + 2) / 4;
+                        out.setPixelABGR(x, y, (a << 24) | 0x00FFFFFF);
+                    }
+                }
+                return out;
+            }
+        }
     }
 
     private static NativeImage makeImage(boolean bloom) {
