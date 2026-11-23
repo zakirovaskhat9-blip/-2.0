@@ -86,9 +86,17 @@ loading = (JAVA/'mixin/LT6LoadingOverlayMixin.java').read_text(encoding='utf-8')
 check('this.fadeInStart = now' in loading, 'Silent reload must advance fadeInStart or mouse remains blocked')
 check('this.fadeOutStart' in loading and 'setOverlay(null)' in loading,
       'Silent reload must eventually release the overlay')
+# Editing must remain possible after the first model drag.
+screen = (JAVA/'LT6Screen.java').read_text(encoding='utf-8')
+check('section == 1' in screen and '"Visuals" : "Player"' in screen,
+      'LT6 must expose separate Visuals and Player navigation')
 chat = (JAVA/'ChatHudEditor.java').read_text(encoding='utf-8')
 check('paintHandle' not in chat and 'draw' not in chat.split('public static void render(')[-1],
       'No crosses or grip overlays in the chat editor')
+check('hasLast[t.ordinal()]' in chat and 'lastX[dragging.ordinal()]' in chat,
+      'Drag and wheel controls must follow the last moved model position')
+check('Scale.v' not in chat or 'scaleSetting(target)' in chat,
+      'Mouse wheel resizing must remain enabled for hands and items')
 cape = (ROOT/'Enchanted/Core/CapeStudio.cs').read_text(encoding='utf-8')
 check('CanvasHeight = 1024' in cape and 'Resolution = 2048' in cape,
       'Prepared cape must use high-resolution Minecraft 64x32 UV aspect')

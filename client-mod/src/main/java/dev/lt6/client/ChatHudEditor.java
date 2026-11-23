@@ -117,6 +117,9 @@ public final class ChatHudEditor {
         if (y >= h - 24) return Target.NONE;
 
         boolean preferArm = mc.hasShiftDown();
+        // Shift prefers the hand beneath an item. If no hand is under the
+        // cursor, still allow the item to be selected for depth adjustment.
+        for (int pass = 0; pass < (preferArm ? 2 : 1); pass++) {
         Target best = Target.NONE;
         double bestScore = Double.POSITIVE_INFINITY;
 
@@ -125,7 +128,7 @@ public final class ChatHudEditor {
             boolean item = t == Target.MAIN_ITEM || t == Target.OFF_ITEM;
             if (item && (main ? mc.player.getMainHandItem() : mc.player.getOffhandItem()).isEmpty())
                 continue;
-            if (preferArm && item) continue;
+            if (preferArm && ((pass == 0) == item)) continue;
 
             double sign = main ? 1 : -1;
             double handX = main ? Cfg.MAIN_HAND_X.v : Cfg.OFF_HAND_X.v;
@@ -172,7 +175,9 @@ public final class ChatHudEditor {
                 bestScore = dist;
             }
         }
-        return best;
+        if (best != Target.NONE) return best;
+        }
+        return Target.NONE;
     }
 
     private static boolean click(MouseButtonEvent event) {
