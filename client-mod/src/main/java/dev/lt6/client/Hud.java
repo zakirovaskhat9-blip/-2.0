@@ -136,16 +136,19 @@ public final class Hud {
         int baseColor = Cfg.ESP_STYLE.idx == 1 ? Cfg.ESP_DIAMOND_TINT.rgb() : Cfg.ESP_TINT.rgb();
         int tint = Gfx.mix(0xFF000000 | baseColor, 0xFFFF4652,
                 Cfg.ESP_RED_ON_HIT.v ? recoil : 0f);
+        int secondary = Gfx.mix(0xFF000000 | Cfg.ESP_TINT_SECONDARY.rgb(), 0xFFFF4652,
+                Cfg.ESP_RED_ON_HIT.v ? recoil : 0f);
         Gfx.alphaMul = 1f;
         if (Cfg.ESP_STYLE.idx == 2) {
             CelestialSpirits.render(graphics, camera, x, y, z, height,
                     screenW, screenH, minecraft.options.fov().get(), opacity,
-                    enter, Cfg.ESP_SIZE.v, Cfg.ESP_GLOW.v);
+                    enter, Cfg.ESP_SIZE.v, Cfg.ESP_GLOW.v,
+                    tint, secondary, Cfg.ESP_PAINT.idx);
             return;
         }
         float angle = continuousAngle(System.nanoTime(), Cfg.ESP_TURN_SECONDS.v);
         drawMarker(graphics, centerX, centerY, radius * spawnScale * (1.0 + 0.16 * recoil),
-                opacity, angle, tint, recoil);
+                opacity, angle, tint, secondary, recoil);
     }
 
     /**
@@ -191,7 +194,7 @@ public final class Hud {
 
     /** Draw four smoothly rounded, supersampled chevrons instead of thick rectangles. */
     private static void drawMarker(GuiGraphics g, double cx, double cy, double radius,
-                                   float opacity, float angle, int tint, float recoil) {
+                                   float opacity, float angle, int tint, int secondary, float recoil) {
         float scale = (float) (radius / 40.0);
         float glowPulse = (float) (0.94 + 0.06 * Math.sin(System.nanoTime() * 1.6e-9));
         double glowLevel = Cfg.ESP_STYLE.idx == 1 ? Cfg.ESP_DIAMOND_GLOW.v : Cfg.ESP_GLOW.v;
@@ -201,7 +204,8 @@ public final class Hud {
         pose.translate((float) cx, (float) cy);
         pose.rotate(angle);
         pose.scale(scale, scale);
-        TargetEspSprite.render(g, tint, opacity, glow, Cfg.ESP_STYLE.idx);
+        TargetEspSprite.render(g, tint, secondary, opacity, glow,
+                Cfg.ESP_STYLE.idx, Cfg.ESP_PAINT.idx);
         pose.popMatrix();
     }
 

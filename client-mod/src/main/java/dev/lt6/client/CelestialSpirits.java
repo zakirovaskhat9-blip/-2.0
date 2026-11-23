@@ -16,8 +16,6 @@ import org.slf4j.LoggerFactory;
  */
 final class CelestialSpirits {
     private static final Logger LOGGER = LoggerFactory.getLogger("LT6/Celestial");
-    private static final int CYAN = 0xFF00F0FF;
-    private static final int VIOLET = 0xFF9D00FF;
     private static final int SPRITE_SIZE = 96;
     private static final Identifier GHOST_SPRITE =
             Identifier.fromNamespaceAndPath("lt6", "generated/celestial_ghost");
@@ -37,7 +35,8 @@ final class CelestialSpirits {
     static void render(GuiGraphics g, Camera camera,
                        double worldX, double worldY, double worldZ, double entityHeight,
                        int sw, int sh, double fov, float opacity, float spawn,
-                       double overallSize, double glowStrength) {
+                       double overallSize, double glowStrength,
+                       int primary, int secondary, int paintMode) {
         if (!textureReady && !textureFailed) initSprite();
         setup(camera, sw, sh, fov);
         double time = System.nanoTime() * 1e-9;
@@ -73,8 +72,14 @@ final class CelestialSpirits {
                 if (p == null) continue;
                 float tail = 1.0f - trail / 18.0f;
                 float alpha = visible * tail * tail;
-                int color = Gfx.mix(CYAN, VIOLET,
-                        (float)(0.5 + 0.5 * Math.sin(time * 0.8 + phase + trail * 0.13)));
+                int color = switch (paintMode) {
+                    case 1 -> ghost < 2 ? primary : secondary;
+                    case 2 -> (ghost + trail / 5) % 2 == 0 ? primary : secondary;
+                    case 3 -> Gfx.mix(primary, secondary, ghost / 3.0f);
+                    case 4 -> Gfx.mix(primary, secondary,
+                            (float)(0.5 + 0.5 * Math.sin(time * 1.25 + phase + trail * 0.13)));
+                    default -> primary;
+                };
                 double screenScale = size * Math.min(33.0, Math.max(5.0,
                         sh * 0.040 * Math.max(0.01, eased) / Math.max(1.5, p.depth)));
                 double radius = screenScale * 2.0 * (trail == 0 ? 1.0 : (0.16 + 0.8 * tail));
