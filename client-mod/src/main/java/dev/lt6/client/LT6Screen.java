@@ -24,8 +24,8 @@ public final class LT6Screen extends Screen {
     private static final int TEXT = 0xFFF2F7FF;
     private static final int MUTED = 0xFF9AACC3;
     private static final int ACCENT = 0xFF62BEFF;
-    private static final String[] LABELS = {"FPS / HUD", "Target ESP", "Custom Sky", "Color Grading", "Hands", "Items"};
-    private static final String[] SUBS = {"Размер и позиция", "Три прежних стиля", "Шесть наборов неба", "Цвет и яркость", "Обе руки отдельно", "Оба предмета отдельно"};
+    private static final String[] LABELS = {"FPS", "Target ESP", "Custom Sky", "Color Grading", "Руки", "Предметы", "Jump FX"};
+    private static final String[] SUBS = {"Размер и позиция", "Три прежних стиля", "Шесть наборов неба", "Цвет и яркость", "Обе руки отдельно", "Оба предмета отдельно", "Круги и искры"};
 
     private record Hit(int x, int y, int w, int h, Runnable action) {
         boolean inside(double px, double py) {
@@ -35,7 +35,8 @@ public final class LT6Screen extends Screen {
 
     private final List<Hit> hits = new ArrayList<>();
     private static int selected = 0;
-    private static int section = 0; // 0 Visuals, 1 Player
+    private static int section = 0; // 0 Visuals, 1 Player, 2 GUI
+    private static int guiPage = 0; // 0 Appearance, 1 Particles
     private int x, y, w, h, sideW, contentX, contentW, viewTop, viewBottom, contentHeight;
     private double scroll;
     private Cfg.Slider dragging;
@@ -52,8 +53,8 @@ public final class LT6Screen extends Screen {
 
     @Override
     protected void init() {
-        selected = Math.max(0, Math.min(5, selected));
-        section = Math.max(0, Math.min(1, section));
+        selected = Math.max(0, Math.min(6, selected));
+        section = Math.max(0, Math.min(2, section));
         Cfg.SKY_PRESET.opts = SkyLib.names();
         if (Cfg.SKY_PRESET.idx >= Cfg.SKY_PRESET.opts.length) Cfg.SKY_PRESET.idx = 0;
         scroll = 0;
@@ -66,7 +67,8 @@ public final class LT6Screen extends Screen {
             case 2 -> Cfg.SKY;
             case 3 -> Cfg.GRADING;
             case 4 -> Cfg.HAND_VIEW;
-            default -> Cfg.ITEM_VIEW;
+            case 5 -> Cfg.ITEM_VIEW;
+            default -> Cfg.JUMP_CIRCLES;
         };
     }
 
@@ -86,13 +88,18 @@ public final class LT6Screen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics g, int mx, int my, float delta) {
-        // Never invoke the vanilla blur: only a lightweight dark scrim.
+        // Blur is optional and rendered in the first GUI stratum below.
     }
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float delta) {
         hits.clear();
         Gfx.alphaMul = 1f;
+        // Native Minecraft GUI blur; no post-effect is left running after close.
+        if (Cfg.UI_BLUR.v && Cfg.UI_BLUR_LEVEL.v > 0
+                && minecraft != null && minecraft.level != null) {
+            g.blurBeforeThisStratum();
+        }
         this.w = Math.max(1, Math.min(width - 16, (int)Cfg.UI_WIDTH.v));
         this.h = Math.max(1, Math.min(height - 16, (int)Cfg.UI_HEIGHT.v));
         this.x = (int)Math.round(Math.max(0, width - w) * Cfg.UI_X.v / 100.0);
@@ -103,27 +110,32 @@ public final class LT6Screen extends Screen {
         this.viewTop = y + 98;
         this.viewBottom = y + h - 34;
 
-        g.fill(0, 0, width, height, 0xA9030912);
-        Gfx.glow(g, x, y, w, h, 11, 0x000000, 0.29f, 3);
-        Gfx.rr(g, x, y, w, h, 11, BG);
+        int veilAlpha = Cfg.UI_BLUR.v ? 60 + (int)(Cfg.UI_BLUR_LEVEL.v * .65) : 93;
+        g.fill(0, 0, width, height, (veilAlpha << 24) | 0x030912);
+        MenuParticles.render(g, width, height, x, y, w, h);
+        if (Cfg.UI_GLOW.v) Gfx.glow(g, x, y, w, h, 10, 0x000000, .25f, 3);
+        int opacity = Math.max(170, Math.min(250, (int)(Cfg.UI_OPACITY.v * 2.55)));
+        Gfx.rr(g, x, y, w, h, 10, (opacity << 24) | (BG & 0xFFFFFF));
         Gfx.rr(g, x + 1, y + 1, sideW, h - 2, 10, SIDE);
         Gfx.ring(g, x, y, w, h, 11, 1, 0x345B7DA2);
         Gfx.rr(g, x + 12, y + 17, 3, 24, 1, ACCENT);
         Gfx.str(g, font, "LT6", x + 25, y + 20, TEXT);
-        Gfx.str(g, font, "VISUALS / PLAYER", x + 25, y + 34, MUTED);
-        // Two main categories. Previously all existing features were mixed
-        // into a flat list, leaving no place for gameplay/player modules.
-        int tabW = (sideW - 25) / 2, tabY = y + 60;
-        for (int i = 0; i < 2; i++) {
+        Gfx.str(g, font, "MINIMAL CLIENT", x + 25, y + 34, MUTED);
+        // Compact sidebar with three sections. Model effects remain in Visuals;
+        // gameplay controls in Player; screen decoration in GUI.
+        int tabW = (sideW - 30) / 3, tabY = y + 60;
+        String[] sections = {"Visuals", "Player", "GUI"};
+        for (int i = 0; i < sections.length; i++) {
             final int next = i;
             int tx = x + 10 + i * (tabW + 5);
-            Gfx.rr(g, tx, tabY, tabW, 29, 6,
+            Gfx.rr(g, tx, tabY, tabW, 27, 6,
                     section == i ? 0xFF315579 : 0xFF1A2B3C);
-            Gfx.strC(g, font, i == 0 ? "Visuals" : "Player",
-                    tx + tabW / 2, tabY + 10, section == i ? TEXT : MUTED);
-            area(tx, tabY, tabW, 29, () -> {
+            Gfx.strC(g, font, Gfx.trim(font, sections[i], tabW-3),
+                    tx + tabW / 2, tabY + 9, section == i ? TEXT : MUTED);
+            area(tx, tabY, tabW, 27, () -> {
                 section = next;
                 scroll = 0;
+                contentHeight = 0;
                 dragging = null;
             });
         }
@@ -131,64 +143,81 @@ public final class LT6Screen extends Screen {
         if (section == 0) {
             Cfg.Module[] modules = {
                     Cfg.FPS, Cfg.TARGET_ESP, Cfg.SKY, Cfg.GRADING,
-                    Cfg.HAND_VIEW, Cfg.ITEM_VIEW
+                    Cfg.HAND_VIEW, Cfg.ITEM_VIEW, Cfg.JUMP_CIRCLES
             };
             for (int i = 0; i < modules.length; i++) {
                 final int id = i;
                 Cfg.Module m = modules[i];
-                int itemSpacing = Math.max(19, Math.min(52, (h - 155) / modules.length));
-                int sy = y + 105 + i * itemSpacing, sx = x + 10, sw = sideW - 18;
-                int itemHeight = Math.max(15, itemSpacing - 4);
+                int itemSpacing = Math.max(20, Math.min(46, (h - 149) / modules.length));
+                int sy = y + 103 + i * itemSpacing, sx = x + 10, sw = sideW - 18;
+                int itemHeight = Math.max(17, itemSpacing - 4);
                 boolean active = selected == i;
                 int fill = active ? 0xFF273F58
                         : hover(mx, my, sx, sy, sw, itemHeight) ? 0xFF1A2C3F
                         : 0xFF142132;
-                Gfx.rr(g, sx, sy, sw, itemHeight, 7, fill);
+                Gfx.rr(g, sx, sy, sw, itemHeight, 6, fill);
                 if (active) Gfx.rr(g, sx, sy + 3, 3, itemHeight - 6, 1, ACCENT);
-                Gfx.str(g, font, Gfx.trim(font, LABELS[i], sw - 26),
-                        sx + 11, sy + (itemHeight < 30 ? 4 : 10),
+                Gfx.str(g, font, Gfx.trim(font, LABELS[i], sw - 28),
+                        sx + 11, sy + (itemHeight < 27 ? 4 : 9),
                         active ? TEXT : 0xFFD5E3F5);
-                if (itemHeight >= 44)
+                if (itemHeight >= 42)
                     Gfx.str(g, font, Gfx.trim(font, SUBS[i], sw - 24),
-                            sx + 11, sy + 28, MUTED);
+                            sx + 11, sy + 26, MUTED);
                 area(sx, sy, sw, itemHeight, () -> {
                     selected = id;
                     scroll = 0;
+                    contentHeight = 0;
                     dragging = null;
                 });
-                Gfx.rr(g, sx + sw - 13, sy + 8, 5, 5, 2,
+                Gfx.rr(g, sx + sw - 13, sy + 7, 5, 5, 2,
                         m.enabled ? 0xFF70E1AD : 0xFF6C7888);
             }
+        } else if (section == 1) {
+            Gfx.str(g, font, "PLAYER", x + 14, y + 110, MUTED);
+            int sx = x + 10, sy = y + 133, sw = sideW - 18;
+            Gfx.rr(g, sx, sy, sw, 43, 7, 0xFF263E58);
+            Gfx.str(g, font, "Fast XP", sx + 11, sy + 10, TEXT);
+            Gfx.str(g, font, "Бутылочки опыта", sx + 11, sy + 27, MUTED);
+            Gfx.rr(g, sx + sw - 13, sy + 9, 5, 5, 2,
+                    Cfg.FAST_XP.enabled ? 0xFF70E1AD : 0xFF6C7888);
         } else {
-            Gfx.str(g, font, "ФУНКЦИИ ИГРОКА", x + 14, y + 114, MUTED);
-            Gfx.rr(g, x + 10, y + 139, sideW - 18, 47, 7, 0xFF1C3044);
-            Gfx.str(g, font, "FastAPI", x + 20, y + 151, TEXT);
-            Gfx.str(g, font, "Требуется уточнение", x + 20, y + 168, MUTED);
+            String[] pages = {"Оформление", "Частицы"};
+            for (int i = 0; i < pages.length; i++) {
+                final int id = i;
+                int sy = y + 110 + i * 48, sx = x + 10, sw = sideW - 18;
+                Gfx.rr(g, sx, sy, sw, 40, 7,
+                        guiPage == i ? 0xFF263E58 : 0xFF182637);
+                Gfx.str(g, font, pages[i], sx + 11, sy + 14,
+                        guiPage == i ? TEXT : MUTED);
+                area(sx, sy, sw, 40, () -> {
+                    guiPage = id;
+                    scroll = 0;
+                    contentHeight = 0;
+                    dragging = null;
+                });
+            }
         }
 
         Gfx.str(g, font, "Y / ESC  |  ДВИГАЙ ЗАГОЛОВОК", x + 12, y + h - 22, 0xFF7F92A9);
 
-        if (section == 1) {
-            Gfx.str(g, font, "PLAYER", contentX, y + 24, TEXT);
-            Gfx.str(g, font, "Настройки поведения игрока", contentX, y + 41, MUTED);
-            Gfx.rr(g, contentX, y + 68, contentW, 106, 8, CARD);
-            Gfx.str(g, font, "FastAPI", contentX + 15, y + 84, TEXT);
-            Gfx.str(g, font, "Пока не активирован", contentX + 15, y + 105, ACCENT);
-            Gfx.str(g, font, Gfx.trim(font,
-                    "Нужно уточнить, какое действие он должен ускорять.",
-                    contentW - 25), contentX + 15, y + 126, MUTED);
-            Gfx.str(g, font, "Y / ESC  |  Автосохранение", contentX, y + h - 21, MUTED);
-            return;
-        }
-
-        Cfg.Module m = module();
-        Gfx.str(g, font, LABELS[selected], contentX, y + 23, TEXT);
-        Gfx.str(g, font, Gfx.trim(font, m.desc, Math.max(90, contentW - 10)), contentX, y + 39, MUTED);
+        Cfg.Module m = section == 1 ? Cfg.FAST_XP
+                : section == 2 ? Cfg.STYLE : module();
+        String headline = section == 1 ? "Fast XP"
+                : section == 2 ? (guiPage == 0 ? "Оформление" : "Частицы")
+                : LABELS[selected];
+        Gfx.str(g, font, headline, contentX, y + 23, TEXT);
+        Gfx.str(g, font, Gfx.trim(font,
+                section == 2 ? "Минималистичный интерфейс LT6" : m.desc,
+                Math.max(90, contentW - 10)), contentX, y + 39, MUTED);
         Gfx.rr(g, contentX, y + 58, contentW, 32, 6, CARD);
-        Gfx.str(g, font, "Включено", contentX + 12, y + 69, TEXT);
-        int toggleX = contentX + contentW - 49, toggleY = y + 67;
-        Gfx.toggle(g, toggleX, toggleY, m.enabled ? 1f : 0f, ACCENT);
-        area(toggleX - 9, y + 58, 58, 32, () -> Cfg.toggle(m));
+        if (section == 2) {
+            Gfx.str(g, font, "Настройка внешнего вида", contentX + 12, y + 69, TEXT);
+        } else {
+            Gfx.str(g, font, "Включено", contentX + 12, y + 69, TEXT);
+            int toggleX = contentX + contentW - 49;
+            Gfx.toggle(g, toggleX, y + 67, m.enabled ? 1f : 0f, ACCENT);
+            area(toggleX - 9, y + 58, 58, 32, () -> Cfg.toggle(m));
+        }
 
         int view = Math.max(1, viewBottom - viewTop);
         int maxScroll = Math.max(0, contentHeight - view);
@@ -199,8 +228,11 @@ public final class LT6Screen extends Screen {
         if (selected == 0) yy = renderFPS(g, mx, my, yy, m);
         else if (selected == 1) yy = renderESP(g, mx, my, yy, m);
         else if (selected == 2) yy = renderSky(g, mx, my, yy, m);
+        else if (section == 1) yy = renderFastXP(g, yy, m);
+        else if (section == 2) yy = renderGUISettings(g, yy, m);
         else if (selected == 3) yy = renderGrading(g, mx, my, yy, m);
-        else yy = renderViewmodel(g, yy, selected == 4, m);
+        else if (selected == 4 || selected == 5) yy = renderViewmodel(g, yy, selected == 4, m);
+        else yy = renderJumpFX(g, yy, m);
         contentHeight = Math.max(0, yy + (int)scroll - viewTop + 8);
         g.disableScissor();
         clip = false;
@@ -256,15 +288,13 @@ public final class LT6Screen extends Screen {
         }
         yy += 72;
         yy = slider(g, yy, Cfg.ESP_SIZE, m);
-        if (Cfg.ESP_STYLE.idx != 2) {
+        if (Cfg.ESP_STYLE.idx != 2)
             yy = slider(g, yy, Cfg.ESP_TURN_SECONDS, m);
-            yy = color(g, yy, Cfg.ESP_STYLE.idx == 1 ? Cfg.ESP_DIAMOND_TINT : Cfg.ESP_TINT, m);
-            yy = slider(g, yy, Cfg.ESP_STYLE.idx == 1 ? Cfg.ESP_DIAMOND_GLOW : Cfg.ESP_GLOW, m);
-            yy = checkbox(g, yy, Cfg.ESP_RED_ON_HIT, m);
-        } else {
-            yy = slider(g, yy, Cfg.ESP_GLOW, m);
-            yy = note(g, yy, "4 духа с анимированными следами вокруг цели");
-        }
+        yy = color(g, yy, Cfg.ESP_STYLE.idx == 1 ? Cfg.ESP_DIAMOND_TINT : Cfg.ESP_TINT, m);
+        yy = color(g, yy, Cfg.ESP_TINT_SECONDARY, m);
+        yy = choice(g, yy, Cfg.ESP_PAINT, m);
+        yy = slider(g, yy, Cfg.ESP_STYLE.idx == 1 ? Cfg.ESP_DIAMOND_GLOW : Cfg.ESP_GLOW, m);
+        yy = checkbox(g, yy, Cfg.ESP_RED_ON_HIT, m);
         return yy;
     }
 
@@ -348,6 +378,67 @@ public final class LT6Screen extends Screen {
         return yy;
     }
 
+    private int renderFastXP(GuiGraphics g, int yy, Cfg.Module module) {
+        yy = note(g, yy, "Бутылочки опыта + удержание ПКМ");
+        yy = slider(g, yy, Cfg.FAST_XP_TICKS, module);
+        yy = note(g, yy, "Работает локально; сервер может ограничить скорость");
+        return yy;
+    }
+
+    private int renderJumpFX(GuiGraphics g, int yy, Cfg.Module module) {
+        yy = note(g, yy, "Прыгай: под ногами появятся волны и искры");
+        yy = choice(g, yy, Cfg.JUMP_PATTERN, module);
+        yy = color(g, yy, Cfg.JUMP_TINT, module);
+        yy = slider(g, yy, Cfg.JUMP_RADIUS, module);
+        yy = slider(g, yy, Cfg.JUMP_DENSITY, module);
+        yy = slider(g, yy, Cfg.JUMP_LIFE, module);
+        return yy;
+    }
+
+    private int renderGUISettings(GuiGraphics g, int yy, Cfg.Module module) {
+        if (guiPage == 0) {
+            yy = note(g, yy, "Компактное окно; можно двигать за заголовок");
+            yy = checkbox(g, yy, Cfg.UI_BLUR, module);
+            yy = slider(g, yy, Cfg.UI_BLUR_LEVEL, module);
+            yy = slider(g, yy, Cfg.UI_WIDTH, module);
+            yy = slider(g, yy, Cfg.UI_HEIGHT, module);
+            yy = slider(g, yy, Cfg.UI_OPACITY, module);
+            yy = checkbox(g, yy, Cfg.UI_GLOW, module);
+        } else {
+            yy = checkbox(g, yy, Cfg.UI_PART, module);
+            yy = choice(g, yy, Cfg.UI_PART_STYLE, module);
+            yy = color(g, yy, Cfg.UI_PART_COLOR, module);
+            yy = color(g, yy, Cfg.UI_PART_COLOR_2, module);
+            yy = checkbox(g, yy, Cfg.UI_PART_SHIMMER, module);
+            yy = slider(g, yy, Cfg.UI_PART_SHIMMER_SPEED, module);
+            yy = slider(g, yy, Cfg.UI_PART_SPEED, module);
+            yy = slider(g, yy, Cfg.UI_PART_SIZE, module);
+            yy = slider(g, yy, Cfg.UI_PART_DENSITY, module);
+        }
+        return yy;
+    }
+
+    private int choice(GuiGraphics g, int yy, Cfg.Choice setting, Cfg.Module module) {
+        int rows = (setting.opts.length + 1) / 2, gap = 6;
+        int bw = Math.max(25, (contentW - gap) / 2);
+        Gfx.str(g, font, setting.name, contentX + 4, yy + 2, MUTED);
+        yy += 17;
+        for (int i = 0; i < setting.opts.length; i++) {
+            final int idx = i;
+            int xx = contentX + (i % 2) * (bw + gap);
+            int sy = yy + (i / 2) * 36;
+            boolean active = setting.idx == i;
+            Gfx.rr(g, xx, sy, bw, 30, 5, active ? 0xFF315A7D : CARD);
+            Gfx.strC(g, font, Gfx.trim(font, setting.opts[i], bw-10),
+                    xx + bw/2, sy + 10, active ? TEXT : MUTED);
+            area(xx, sy, bw, 30, () -> {
+                setting.idx = idx;
+                Cfg.changed(module);
+            });
+        }
+        return yy + rows * 36 + 12;
+    }
+
     private int note(GuiGraphics g, int yy, String value) {
         Gfx.rr(g, contentX, yy, contentW, 40, 6, 0xFF182839);
         Gfx.str(g, font, Gfx.trim(font, value, contentW - 18),
@@ -395,7 +486,7 @@ public final class LT6Screen extends Screen {
         Gfx.str(g, font, setting.name, contentX + 12, yy + 10, TEXT);
         Gfx.rr(g, contentX + contentW - 30, yy + 10, 17, 14, 3,
                 0xFF000000 | setting.rgb());
-        int[] values = {0xFFFFFF, 0xFF5555, 0xFFAA55, 0xE8DD55, 0x55E78C,
+        int[] values = {0x000000, 0xFFFFFF, 0xFF5555, 0xFFAA55, 0xE8DD55, 0x55E78C,
                 0xB6F0FD, 0x4F95FF, 0xBA7CFF, 0xFF77CA};
         int count = values.length, gap = 5;
         int square = Math.max(7, Math.min(23, (contentW - 25 - (count - 1) * gap) / count));
