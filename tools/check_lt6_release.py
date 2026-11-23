@@ -108,6 +108,7 @@ check('@Inject(method = "renderArmWithItem"' in viewmodel
       'Offhand must be editable when the slot is empty')
 check('@Inject(method = "renderMapHand"' in viewmodel,
       'Map hands must also honour hand-only transforms')
+cfg = (JAVA/'Cfg.java').read_text(encoding='utf-8')
 check('viewmodel_version' in cfg and 'resetViewmodelSettings(HAND_VIEW)' in cfg,
       'New viewmodel config must migrate old combined translations')
 check('Cfg.SHOW_EMPTY_OFFHAND' in screen and 'viewmodelReset(' in screen,
