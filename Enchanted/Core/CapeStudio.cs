@@ -9,7 +9,7 @@ namespace Enchanted;
 /// uses a 64x32 UV grid (the baked model halves the vertical UV scale).
 /// 2048x1024 gives each 10x16 cape face a 320x512 pixel canvas.
 /// The original PNG is saved separately and never modified.
-</summary>
+/// </summary>
 public static class CapeStudio
 {
     public const int Resolution = 2048;
