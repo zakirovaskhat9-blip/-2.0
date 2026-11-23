@@ -188,7 +188,7 @@ public final class Cfg {
 	public static final Bool SHOW_HAND_WITH_ITEM = new Bool("hand_with_item",
 		"Показывать руку рядом с предметом", true);
 	public static final Module HAND_VIEW = new Module("hand_view", "Viewmodel Hands",
-		"Только модель руки: независимо от предметов", VIS, false,
+		"Только модель руки: независимо от предметов", VIS, true,
 		MAIN_HAND_SIZE, MAIN_HAND_X, MAIN_HAND_Y, MAIN_HAND_Z,
 		OFF_HAND_SIZE, OFF_HAND_X, OFF_HAND_Y, OFF_HAND_Z,
 		SHOW_EMPTY_OFFHAND, SHOW_HAND_WITH_ITEM);
@@ -202,7 +202,7 @@ public final class Cfg {
 	public static final Slider ITEM_OFF_X = new Slider("off_item_x", "Предмет слева: X", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_OFF_Y = new Slider("off_item_y", "Предмет слева: Y", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_OFF_Z = new Slider("off_item_z", "Предмет слева: Z", -1.5, 1.5, 0.05, 0, "");
-	public static final Module ITEM_VIEW = new Module("item_view", "Viewmodel Items", "Только предметы: не сдвигает модели рук", VIS, false,
+	public static final Module ITEM_VIEW = new Module("item_view", "Viewmodel Items", "Только предметы: не сдвигает модели рук", VIS, true,
 		ITEM_VIEW_SIZE, ITEM_VIEW_X, ITEM_VIEW_Y, ITEM_VIEW_Z, ITEM_OFF_SIZE, ITEM_OFF_X, ITEM_OFF_Y, ITEM_OFF_Z);
 
 	public static final Color HIT_TINT = new Color("color", "Цвет попадания", 1);
@@ -372,7 +372,7 @@ public final class Cfg {
 
 	// New renderer is not a child transform of the held item. One-time
 	// migration resets only old viewmodel translations, never other modules.
-	private static final int VIEWMODEL_CONFIG_VERSION = 3;
+	private static final int VIEWMODEL_CONFIG_VERSION = 4;
 
 	static void resetViewmodelSettings(Module module) {
 		for (Setting setting : module.settings) setting.reset();
@@ -451,6 +451,8 @@ public final class Cfg {
 				// Migrate once, preserving all non-viewmodel settings.
 				resetViewmodelSettings(HAND_VIEW);
 				resetViewmodelSettings(ITEM_VIEW);
+                HAND_VIEW.enabled = true;
+                ITEM_VIEW.enabled = true;
 				ChatHudEditor.clearAnchors();
 				LOGGER.info("Migrated viewmodel settings v{} -> v{}; hand/item positions reset",
 						oldVersion, VIEWMODEL_CONFIG_VERSION);
