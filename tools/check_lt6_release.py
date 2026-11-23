@@ -88,8 +88,20 @@ check('this.fadeOutStart' in loading and 'setOverlay(null)' in loading,
       'Silent reload must eventually release the overlay')
 # Editing must remain possible after the first model drag.
 screen = (JAVA/'LT6Screen.java').read_text(encoding='utf-8')
-check('section == 1' in screen and '"Visuals" : "Player"' in screen,
-      'LT6 must expose separate Visuals and Player navigation')
+check('section == 1' in screen and 'section == 2' in screen
+      and '"Visuals", "Player", "GUI"' in screen,
+      'LT6 must expose Visuals, Player and GUI navigation')
+check('Cfg.ESP_TINT_SECONDARY' in screen and 'Cfg.ESP_PAINT' in screen,
+      'Target ESP must offer secondary colour and colour patterns')
+check('Cfg.JUMP_PATTERN' in screen and 'Cfg.JUMP_TINT' in screen,
+      'Jump FX needs effect and colour settings')
+check('Cfg.UI_PART_STYLE' in screen and 'Cfg.UI_BLUR' in screen,
+      'GUI particles and optional background blur must be configurable')
+check((JAVA/'FastXP.java').is_file() and 'FastXP.tick(mc)' in (JAVA/'LT6Client.java').read_text(encoding='utf-8'),
+      'Fast XP should be active from client ticks')
+check((JAVA/'mixin/LT6SkySunMixin.java').is_file()
+      and 'renderSun' in (JAVA/'mixin/LT6SkySunMixin.java').read_text(encoding='utf-8'),
+      'Hide only the vanilla sun when Custom Sky is active')
 chat = (JAVA/'ChatHudEditor.java').read_text(encoding='utf-8')
 check('paintHandle' not in chat and 'draw' not in chat.split('public static void render(')[-1],
       'No crosses or grip overlays in the chat editor')
