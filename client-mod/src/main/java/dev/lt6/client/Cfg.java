@@ -391,6 +391,7 @@ public final class Cfg {
 			OFF_HAND_Z.reset();
 		}
 		HAND_VIEW.enabled = true;
+		ChatHudEditor.clearAnchors();
 		changed(HAND_VIEW);
 	}
 
@@ -407,6 +408,7 @@ public final class Cfg {
 			ITEM_OFF_Z.reset();
 		}
 		ITEM_VIEW.enabled = true;
+		ChatHudEditor.clearAnchors();
 		changed(ITEM_VIEW);
 	}
 
@@ -443,6 +445,7 @@ public final class Cfg {
 				// Migrate once, preserving all non-viewmodel settings.
 				resetViewmodelSettings(HAND_VIEW);
 				resetViewmodelSettings(ITEM_VIEW);
+				ChatHudEditor.clearAnchors();
 				LOGGER.info("Migrated viewmodel settings v{} -> v{}; hand/item positions reset",
 						oldVersion, VIEWMODEL_CONFIG_VERSION);
 				save();

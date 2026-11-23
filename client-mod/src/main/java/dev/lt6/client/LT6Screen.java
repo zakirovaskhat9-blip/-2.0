@@ -376,21 +376,44 @@ public final class LT6Screen extends Screen {
         return yy;
     }
 
+    /** The arm controls never change an item transform (and vice versa). */
     private int renderViewmodel(GuiGraphics g, int yy, boolean hands, Cfg.Module module) {
-        yy = note(g, yy, "Чат (T): тяни рукой; Shift — выбрать руку; колесо — размер");
-        Gfx.str(g, font, "ОСНОВНАЯ РУКА / ПРЕДМЕТ", contentX + 6, yy + 3, MUTED);
+        yy = note(g, yy, hands
+                ? "Пустая основная рука: держи слот пустым и меняй X/Y"
+                : "Предмет меняется отдельно; рука остаётся на месте");
+        if (hands) {
+            yy = checkbox(g, yy, Cfg.SHOW_EMPTY_OFFHAND, module);
+            yy = checkbox(g, yy, Cfg.SHOW_HAND_WITH_ITEM, module);
+            yy = note(g, yy, "Чат (T): тяни модель; колесо — размер; Ctrl — глубина");
+        }
+
+        Gfx.str(g, font, hands ? "ОСНОВНАЯ РУКА" : "ПРЕДМЕТ В ОСНОВНОЙ", contentX + 6, yy + 3, MUTED);
         yy += 22;
         Cfg.Slider[] main = hands
                 ? new Cfg.Slider[]{Cfg.MAIN_HAND_SIZE, Cfg.MAIN_HAND_X, Cfg.MAIN_HAND_Y, Cfg.MAIN_HAND_Z}
                 : new Cfg.Slider[]{Cfg.ITEM_VIEW_SIZE, Cfg.ITEM_VIEW_X, Cfg.ITEM_VIEW_Y, Cfg.ITEM_VIEW_Z};
-        for (Cfg.Slider s : main) yy = slider(g, yy, s, module);
-        Gfx.str(g, font, "ВТОРАЯ РУКА / ПРЕДМЕТ", contentX + 6, yy + 3, MUTED);
+        for (Cfg.Slider setting : main) yy = slider(g, yy, setting, module);
+        yy = viewmodelReset(g, yy, hands, true);
+
+        Gfx.str(g, font, hands ? "ВТОРАЯ РУКА" : "ПРЕДМЕТ ВО ВТОРОЙ", contentX + 6, yy + 3, MUTED);
         yy += 22;
         Cfg.Slider[] off = hands
                 ? new Cfg.Slider[]{Cfg.OFF_HAND_SIZE, Cfg.OFF_HAND_X, Cfg.OFF_HAND_Y, Cfg.OFF_HAND_Z}
                 : new Cfg.Slider[]{Cfg.ITEM_OFF_SIZE, Cfg.ITEM_OFF_X, Cfg.ITEM_OFF_Y, Cfg.ITEM_OFF_Z};
-        for (Cfg.Slider s : off) yy = slider(g, yy, s, module);
+        for (Cfg.Slider setting : off) yy = slider(g, yy, setting, module);
+        yy = viewmodelReset(g, yy, hands, false);
         return yy;
+    }
+
+    private int viewmodelReset(GuiGraphics g, int yy, boolean hands, boolean main) {
+        String label = main ? "Сбросить основную" : "Сбросить вторую";
+        Gfx.rr(g, contentX, yy, contentW, 28, 6, CARD);
+        Gfx.strC(g, font, label, contentX + contentW / 2, yy + 9, ACCENT);
+        area(contentX, yy, contentW, 28, () -> {
+            if (hands) Cfg.resetViewmodelHand(main);
+            else Cfg.resetViewmodelItem(main);
+        });
+        return yy + 36;
     }
 
     private int renderHitColor(GuiGraphics g, int yy, Cfg.Module module) {
@@ -477,6 +500,7 @@ public final class LT6Screen extends Screen {
         Gfx.toggle(g, sx, yy + 13, setting.v ? 1f : 0f, ACCENT);
         area(contentX, yy, contentW, 38, () -> {
             setting.v = !setting.v;
+            if (m == Cfg.HAND_VIEW || m == Cfg.ITEM_VIEW) m.enabled = true;
             Cfg.changed(m);
         });
         return yy + 46;

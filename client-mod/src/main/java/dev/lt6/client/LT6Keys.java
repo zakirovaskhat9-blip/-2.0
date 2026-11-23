@@ -13,6 +13,7 @@ public final class LT6Keys {
             Identifier.fromNamespaceAndPath("lt6", "controls"));
     private static KeyMapping openGui;
     private static boolean openRequested;
+    private static boolean yHeld;
 
     private LT6Keys() { }
 
@@ -35,8 +36,14 @@ public final class LT6Keys {
         // Consume clicks even in menus so the GUI won't unexpectedly open later.
         boolean pressed = false;
         while (openGui.consumeClick()) pressed = true;
+        // Guaranteed Y shortcut, even if the player's legacy options.txt
+        // still remaps the Fabric keybind to Left/Right Shift.
+        long window = mc.getWindow().handle();
+        boolean yDown = window != 0L && GLFW.glfwGetKey(window, GLFW.GLFW_KEY_Y) == GLFW.GLFW_PRESS;
+        boolean yPressed = yDown && !yHeld;
+        yHeld = yDown;
         if (mc.player == null || mc.level == null || mc.screen != null) return;
-        if (pressed || openRequested) {
+        if (pressed || yPressed || openRequested) {
             openRequested = false;
             try {
                 mc.setScreen(new LT6Screen());

@@ -33,6 +33,11 @@ public final class ChatHudEditor {
 
     public static void onChatOpened() { dragging = Target.NONE; }
 
+    public static void clearAnchors() {
+        dragging = Target.NONE;
+        java.util.Arrays.fill(anchored, false);
+    }
+
     private static Minecraft mc() { return Minecraft.getInstance(); }
     private static int width() { return mc().getWindow().getGuiScaledWidth(); }
     private static int height() { return mc().getWindow().getGuiScaledHeight(); }

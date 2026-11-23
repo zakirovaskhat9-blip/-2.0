@@ -99,9 +99,21 @@ check('Cfg.HAND_VIEW || dragOwner == Cfg.ITEM_VIEW' in screen
       and 'dragOwner.enabled = true' in screen,
       'Moving a viewmodel slider must enable the hand or item module')
 viewmodel = (JAVA/'mixin/FirstPersonViewMixin.java').read_text(encoding='utf-8')
-check('@Redirect(method = "renderHandsWithItems"' in viewmodel
-      and 'require = 2' in viewmodel,
-      'First-person matrices must wrap both vanilla hand/item submissions')
+check('@Redirect(method = "renderHandsWithItems"' not in viewmodel
+      and '@Inject(method = "renderPlayerArm"' in viewmodel
+      and '@Inject(method = "renderItem"' in viewmodel,
+      'Hand and item drawing must use fully independent matrices')
+check('@Inject(method = "renderArmWithItem"' in viewmodel
+      and 'Cfg.SHOW_EMPTY_OFFHAND.v' in viewmodel,
+      'Offhand must be editable when the slot is empty')
+check('@Inject(method = "renderMapHand"' in viewmodel,
+      'Map hands must also honour hand-only transforms')
+check('viewmodel_version' in cfg and 'resetViewmodelSettings(HAND_VIEW)' in cfg,
+      'New viewmodel config must migrate old combined translations')
+check('Cfg.SHOW_EMPTY_OFFHAND' in screen and 'viewmodelReset(' in screen,
+      'GUI should expose empty offhand, per-hand resets and independent controls')
+check('yPressed' in (JAVA/'LT6Keys.java').read_text(encoding='utf-8'),
+      'Y must open LT6 even if old keybindings were remapped')
 chatmixin = (JAVA/'mixin/LT6ChatEditMixin.java').read_text(encoding='utf-8')
 check('ChatHudEditor.drag(event)' in chatmixin
       and 'ChatHudEditor.release(event)' in chatmixin
@@ -126,8 +138,10 @@ check((JAVA/'mixin/LT6SkySunMixin.java').is_file()
 chat = (JAVA/'ChatHudEditor.java').read_text(encoding='utf-8')
 check('paintHandle' not in chat and 'draw' not in chat.split('public static void render(')[-1],
       'No crosses or grip overlays in the chat editor')
-check('hasLast[t.ordinal()]' in chat and 'lastX[dragging.ordinal()]' in chat,
+check('anchored[t.ordinal()]' in chat and 'lastX[dragging.ordinal()]' in chat,
       'Drag and wheel controls must follow the last moved model position')
+check('isMain(t)' in chat and 'lt6$isFirstPerson' in viewmodel,
+      'Hand/item selection must distinguish held items from arm models')
 check('Scale.v' not in chat or 'scaleSetting(target)' in chat,
       'Mouse wheel resizing must remain enabled for hands and items')
 cape = (ROOT/'Enchanted/Core/CapeStudio.cs').read_text(encoding='utf-8')
