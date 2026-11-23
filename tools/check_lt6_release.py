@@ -123,6 +123,10 @@ check('ChatHudEditor.drag(event)' in chatmixin
 cfg = (JAVA/'Cfg.java').read_text(encoding='utf-8')
 check('JUMP_CIRCLES, HIT_COLOR, FAST_XP' in cfg,
       'Restored Hit Color must persist through config')
+check('blurBeforeThisStratum()' not in screen.split('public void render(')[-1].split('private int renderFPS(')[0],
+      'LT6 must never blur the entire game framebuffer')
+check('gui_layout_version' in cfg and 'Math.max(250, width * .50)' in screen,
+      'GUI must start near half the screen or less')
 check('Cfg.ESP_TINT_SECONDARY' in screen and 'Cfg.ESP_PAINT' in screen,
       'Target ESP must offer secondary colour and colour patterns')
 check('Cfg.JUMP_PATTERN' in screen and 'Cfg.JUMP_TINT' in screen,
@@ -137,12 +141,18 @@ check((JAVA/'mixin/LT6SkySunMixin.java').is_file()
       and 'renderSun' in (JAVA/'mixin/LT6SkySunMixin.java').read_text(encoding='utf-8'),
       'Hide only the vanilla sun when Custom Sky is active')
 chat = (JAVA/'ChatHudEditor.java').read_text(encoding='utf-8')
-check('paintHandle' not in chat and 'draw' not in chat.split('public static void render(')[-1],
-      'No crosses or grip overlays in the chat editor')
-check('anchored[t.ordinal()]' in chat and 'lastX[dragging.ordinal()]' in chat,
-      'Drag and wheel controls must follow the last moved model position')
-check('isMain(t)' in chat and 'lt6$isFirstPerson' in viewmodel,
-      'Hand/item selection must distinguish held items from arm models')
+check('paintHandle' not in chat and 'Gfx.rr' in chat
+      and 'rect.contains(px, py)' in chat,
+      'Chat must expose exact grab buttons, never hidden crosses')
+check('ViewmodelHitboxes.get(main(t), item(t))' in chat
+      and (JAVA/'ViewmodelHitboxes.java').is_file(),
+      'Grab buttons and model hits must follow renderer-projected bounding boxes')
+check('ViewmodelHitboxes.capture(pose' in viewmodel
+      and 'lt6$isFirstPerson' in viewmodel,
+      'Hand and item hitbox capture must use their own rendering matrices')
+check('double sx = isItem ? .115 : .17' in chat
+      and 'owner(dragging)' in chat,
+      'Dragging a hand or item must update only its own configuration')
 check('Scale.v' not in chat or 'scaleSetting(target)' in chat,
       'Mouse wheel resizing must remain enabled for hands and items')
 cape = (ROOT/'Enchanted/Core/CapeStudio.cs').read_text(encoding='utf-8')
