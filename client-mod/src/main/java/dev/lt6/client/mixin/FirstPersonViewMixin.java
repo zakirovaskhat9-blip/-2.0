@@ -2,6 +2,7 @@ package dev.lt6.client.mixin;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.lt6.client.Cfg;
+import dev.lt6.client.ViewmodelHitboxes;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.ItemInHandRenderer;
@@ -66,7 +67,11 @@ public abstract class FirstPersonViewMixin {
     @Inject(method = "renderPlayerArm", at = @At("RETURN"), require = 1)
     private void lt6$armEnd(PoseStack pose, SubmitNodeCollector collector,
             int light, float equip, float swing, HumanoidArm arm, CallbackInfo ci) {
-        if (Cfg.HAND_VIEW.enabled && this.minecraft.player != null) pose.popPose();
+        if (this.minecraft.player != null) {
+            ViewmodelHitboxes.capture(pose,
+                    arm == this.minecraft.player.getMainArm(), false);
+            if (Cfg.HAND_VIEW.enabled) pose.popPose();
+        }
     }
 
     // Two-handed maps use renderMapHand instead of renderPlayerArm.
@@ -81,7 +86,11 @@ public abstract class FirstPersonViewMixin {
     @Inject(method = "renderMapHand", at = @At("RETURN"), require = 1)
     private void lt6$mapArmEnd(PoseStack pose, SubmitNodeCollector collector,
             int light, HumanoidArm arm, CallbackInfo ci) {
-        if (Cfg.HAND_VIEW.enabled && this.minecraft.player != null) pose.popPose();
+        if (this.minecraft.player != null) {
+            ViewmodelHitboxes.capture(pose,
+                    arm == this.minecraft.player.getMainArm(), false);
+            if (Cfg.HAND_VIEW.enabled) pose.popPose();
+        }
     }
 
     /**
@@ -132,9 +141,12 @@ public abstract class FirstPersonViewMixin {
     private void lt6$itemBegin(LivingEntity entity, ItemStack item,
             ItemDisplayContext mode, PoseStack pose, SubmitNodeCollector collector,
             int light, CallbackInfo ci) {
-        if (!Cfg.ITEM_VIEW.enabled || item.isEmpty() || !lt6$isFirstPerson(mode))
-            return;
+        if (item.isEmpty() || !lt6$isFirstPerson(mode)) return;
         boolean main = lt6$mainItem(entity, mode);
+        if (!Cfg.ITEM_VIEW.enabled) {
+            ViewmodelHitboxes.capture(pose, main, true);
+            return;
+        }
         double x = main ? Cfg.ITEM_VIEW_X.v : Cfg.ITEM_OFF_X.v;
         double y = main ? Cfg.ITEM_VIEW_Y.v : Cfg.ITEM_OFF_Y.v;
         double z = main ? Cfg.ITEM_VIEW_Z.v : Cfg.ITEM_OFF_Z.v;
@@ -142,6 +154,7 @@ public abstract class FirstPersonViewMixin {
         pose.pushPose();
         pose.translate(x, y, z);
         pose.scale(size, size, size);
+        ViewmodelHitboxes.capture(pose, main, true);
     }
 
     @Inject(method = "renderItem", at = @At("RETURN"), require = 1)

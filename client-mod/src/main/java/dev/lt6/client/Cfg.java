@@ -184,9 +184,9 @@ public final class Cfg {
 	public static final Slider OFF_HAND_Y = new Slider("off_y", "Вторая: Y", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider OFF_HAND_Z = new Slider("off_z", "Вторая: Z", -1.5, 1.5, 0.05, 0, "");
 	public static final Bool SHOW_EMPTY_OFFHAND = new Bool("empty_offhand_visible",
-		"Показывать пустую вторую руку", false);
+		"Показывать пустую вторую руку", true);
 	public static final Bool SHOW_HAND_WITH_ITEM = new Bool("hand_with_item",
-		"Показывать руку рядом с предметом", false);
+		"Показывать руку рядом с предметом", true);
 	public static final Module HAND_VIEW = new Module("hand_view", "Viewmodel Hands",
 		"Только модель руки: независимо от предметов", VIS, false,
 		MAIN_HAND_SIZE, MAIN_HAND_X, MAIN_HAND_Y, MAIN_HAND_Z,
@@ -372,7 +372,7 @@ public final class Cfg {
 
 	// New renderer is not a child transform of the held item. One-time
 	// migration resets only old viewmodel translations, never other modules.
-	private static final int VIEWMODEL_CONFIG_VERSION = 2;
+	private static final int VIEWMODEL_CONFIG_VERSION = 3;
 
 	static void resetViewmodelSettings(Module module) {
 		for (Setting setting : module.settings) setting.reset();
