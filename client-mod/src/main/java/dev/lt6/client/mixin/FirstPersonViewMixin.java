@@ -2,92 +2,153 @@ package dev.lt6.client.mixin;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.lt6.client.Cfg;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Per-hand matrix transforms around the actual vanilla hand/item submission.
- * Rendering continues through Mojang's normal animation and item paths, with
- * every PoseStack push protected by a finally block. No client/server packets.
+ * LT6 viewmodel v2 — separate transforms at the actual vanilla draw methods.
+ *
+ * Old code wrapped renderArmWithItem, which contains both the arm and held
+ * item, so moving/scaling a hand always moved/scaled the item as well.
+ * This mixin changes ONLY renderPlayerArm/renderMapHand for the arm and ONLY
+ * renderItem for an item. The surrounding vanilla matrices are never touched.
+ *
+ * Empty main hand uses vanilla renderPlayerArm. An optional empty offhand is
+ * drawn by calling that same method, without changing the held item at all.
  */
 @Mixin(ItemInHandRenderer.class)
 public abstract class FirstPersonViewMixin {
+    @Shadow @Final private Minecraft minecraft;
+
     @Shadow
-    private void renderArmWithItem(AbstractClientPlayer player, float partialTick, float pitch,
-            InteractionHand hand, float swing, ItemStack item, float equip,
-            PoseStack pose, SubmitNodeCollector collector, int light) {
-        throw new AssertionError("Shadow of ItemInHandRenderer.renderArmWithItem was not remapped");
+    private void renderPlayerArm(PoseStack pose, SubmitNodeCollector collector,
+            int light, float equip, float swing, HumanoidArm arm) {
+        throw new AssertionError("Shadow renderPlayerArm was not remapped");
     }
 
-    @Redirect(method = "renderHandsWithItems",
-            at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/ItemInHandRenderer;renderArmWithItem(Lnet/minecraft/client/player/AbstractClientPlayer;FFLnet/minecraft/world/InteractionHand;FLnet/minecraft/world/item/ItemStack;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;I)V"),
-            require = 2)
-    private void lt6$viewmodelHand(ItemInHandRenderer renderer, AbstractClientPlayer player,
-            float partialTick, float pitch, InteractionHand hand, float swing, ItemStack item,
-            float equip, PoseStack pose, SubmitNodeCollector collector, int light) {
-        boolean enabled = Cfg.HAND_VIEW.enabled;
-        if (enabled) {
-            boolean main = hand == InteractionHand.MAIN_HAND;
-            float scale = (float)(main ? Cfg.MAIN_HAND_SIZE.v : Cfg.OFF_HAND_SIZE.v);
-            double x = main ? Cfg.MAIN_HAND_X.v : Cfg.OFF_HAND_X.v;
-            double y = main ? Cfg.MAIN_HAND_Y.v : Cfg.OFF_HAND_Y.v;
-            double z = main ? Cfg.MAIN_HAND_Z.v : Cfg.OFF_HAND_Z.v;
-            pose.pushPose();
-            pose.translate(x, y, z);
-            pose.scale(scale, scale, scale);
-        }
-        try {
-            this.renderArmWithItem(player, partialTick, pitch, hand, swing, item,
-                    equip, pose, collector, light);
-        } finally {
-            if (enabled) pose.popPose();
-        }
+    @Unique
+    private void lt6$applyHand(PoseStack pose, HumanoidArm physicalArm) {
+        boolean main = this.minecraft.player != null
+                && physicalArm == this.minecraft.player.getMainArm();
+        double x = main ? Cfg.MAIN_HAND_X.v : Cfg.OFF_HAND_X.v;
+        double y = main ? Cfg.MAIN_HAND_Y.v : Cfg.OFF_HAND_Y.v;
+        double z = main ? Cfg.MAIN_HAND_Z.v : Cfg.OFF_HAND_Z.v;
+        float size = (float)(main ? Cfg.MAIN_HAND_SIZE.v : Cfg.OFF_HAND_SIZE.v);
+        pose.translate(x, y, z);
+        pose.scale(size, size, size);
+    }
+
+    // Arms drawn normally when the main slot is empty and for single-hand
+    // maps. These hooks cannot affect items — they run inside arm rendering.
+    @Inject(method = "renderPlayerArm", at = @At("HEAD"), require = 1)
+    private void lt6$armBegin(PoseStack pose, SubmitNodeCollector collector,
+            int light, float equip, float swing, HumanoidArm arm, CallbackInfo ci) {
+        if (!Cfg.HAND_VIEW.enabled || this.minecraft.player == null) return;
+        pose.pushPose();
+        lt6$applyHand(pose, arm);
+    }
+
+    @Inject(method = "renderPlayerArm", at = @At("RETURN"), require = 1)
+    private void lt6$armEnd(PoseStack pose, SubmitNodeCollector collector,
+            int light, float equip, float swing, HumanoidArm arm, CallbackInfo ci) {
+        if (Cfg.HAND_VIEW.enabled && this.minecraft.player != null) pose.popPose();
+    }
+
+    // Two-handed maps use renderMapHand instead of renderPlayerArm.
+    @Inject(method = "renderMapHand", at = @At("HEAD"), require = 1)
+    private void lt6$mapArmBegin(PoseStack pose, SubmitNodeCollector collector,
+            int light, HumanoidArm arm, CallbackInfo ci) {
+        if (!Cfg.HAND_VIEW.enabled || this.minecraft.player == null) return;
+        pose.pushPose();
+        lt6$applyHand(pose, arm);
+    }
+
+    @Inject(method = "renderMapHand", at = @At("RETURN"), require = 1)
+    private void lt6$mapArmEnd(PoseStack pose, SubmitNodeCollector collector,
+            int light, HumanoidArm arm, CallbackInfo ci) {
+        if (Cfg.HAND_VIEW.enabled && this.minecraft.player != null) pose.popPose();
     }
 
     /**
-     * Independent item transform inside the normal hand matrix. Determine
-     * main/off hand from player's handedness, not right/left screen side.
-     * Works with left-handed players and retains empty-hand rendering.
+     * Vanilla only draws the bare MAIN hand when empty; empty OFF hand is
+     * omitted entirely. Allow the player to show and edit it independently.
+     * Optionally draw an arm beside a held item; no parent matrix wrapping.
      */
+    @Inject(method = "renderArmWithItem", at = @At("HEAD"), require = 1)
+    private void lt6$optionalArm(AbstractClientPlayer player, float partialTick,
+            float pitch, InteractionHand hand, float swing, ItemStack item,
+            float equip, PoseStack pose, SubmitNodeCollector collector,
+            int light, CallbackInfo ci) {
+        if (!Cfg.HAND_VIEW.enabled || player.isInvisible() || player.isScoping()) return;
+        boolean empty = item.isEmpty();
+        boolean extraEmpty = empty && hand == InteractionHand.OFF_HAND
+                && Cfg.SHOW_EMPTY_OFFHAND.v;
+        boolean besideItem = !empty && Cfg.SHOW_HAND_WITH_ITEM.v
+                && !item.has(DataComponents.MAP_ID);
+        if (!extraEmpty && !besideItem) return;
+        if (extraEmpty && player.getMainHandItem().has(DataComponents.MAP_ID))
+            return; // The two-handed map already renders both arms.
+
+        HumanoidArm side = hand == InteractionHand.MAIN_HAND
+                ? player.getMainArm() : player.getMainArm().getOpposite();
+        pose.pushPose();
+        try {
+            // Calls the vanilla arm model, including LT6's arm-only transform.
+            this.renderPlayerArm(pose, collector, light, equip, swing, side);
+        } finally {
+            pose.popPose();
+        }
+    }
+
+    @Unique
+    private static boolean lt6$isFirstPerson(ItemDisplayContext mode) {
+        return mode == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND
+                || mode == ItemDisplayContext.FIRST_PERSON_LEFT_HAND;
+    }
+
+    @Unique
+    private static boolean lt6$mainItem(LivingEntity entity, ItemDisplayContext mode) {
+        return (mode == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND)
+                == (entity.getMainArm() == HumanoidArm.RIGHT);
+    }
+
+    // Independent item path; no hand pose is changed by this injection.
     @Inject(method = "renderItem", at = @At("HEAD"), require = 1)
-    private void lt6$itemStart(LivingEntity entity, ItemStack item, ItemDisplayContext mode,
-            PoseStack pose, SubmitNodeCollector collector, int light, CallbackInfo ci) {
-        if (!Cfg.ITEM_VIEW.enabled || !isFirstPerson(mode)) return;
-        boolean main = mainItem(entity, mode);
+    private void lt6$itemBegin(LivingEntity entity, ItemStack item,
+            ItemDisplayContext mode, PoseStack pose, SubmitNodeCollector collector,
+            int light, CallbackInfo ci) {
+        if (!Cfg.ITEM_VIEW.enabled || item.isEmpty() || !lt6$isFirstPerson(mode))
+            return;
+        boolean main = lt6$mainItem(entity, mode);
         double x = main ? Cfg.ITEM_VIEW_X.v : Cfg.ITEM_OFF_X.v;
         double y = main ? Cfg.ITEM_VIEW_Y.v : Cfg.ITEM_OFF_Y.v;
         double z = main ? Cfg.ITEM_VIEW_Z.v : Cfg.ITEM_OFF_Z.v;
-        float scale = (float)(main ? Cfg.ITEM_VIEW_SIZE.v : Cfg.ITEM_OFF_SIZE.v);
+        float size = (float)(main ? Cfg.ITEM_VIEW_SIZE.v : Cfg.ITEM_OFF_SIZE.v);
         pose.pushPose();
         pose.translate(x, y, z);
-        pose.scale(scale, scale, scale);
+        pose.scale(size, size, size);
     }
 
     @Inject(method = "renderItem", at = @At("RETURN"), require = 1)
-    private void lt6$itemEnd(LivingEntity entity, ItemStack item, ItemDisplayContext mode,
-            PoseStack pose, SubmitNodeCollector collector, int light, CallbackInfo ci) {
-        if (Cfg.ITEM_VIEW.enabled && isFirstPerson(mode)) pose.popPose();
-    }
-
-    private static boolean isFirstPerson(ItemDisplayContext mode) {
-        return mode == ItemDisplayContext.FIRST_PERSON_LEFT_HAND
-                || mode == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND;
-    }
-    private static boolean mainItem(LivingEntity entity, ItemDisplayContext mode) {
-        return (mode == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND)
-                == (entity.getMainArm() == HumanoidArm.RIGHT);
+    private void lt6$itemEnd(LivingEntity entity, ItemStack item,
+            ItemDisplayContext mode, PoseStack pose, SubmitNodeCollector collector,
+            int light, CallbackInfo ci) {
+        if (Cfg.ITEM_VIEW.enabled && !item.isEmpty() && lt6$isFirstPerson(mode))
+            pose.popPose();
     }
 }
