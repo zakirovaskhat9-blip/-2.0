@@ -13,7 +13,8 @@
     "LT6LoadingOverlayMixin",
     "LT6ChatEditMixin",
     "LT6LocalCapeMixin",
-    "LT6SkySunMixin"
+    "LT6SkySunMixin",
+    "LT6FastXPMixin"
   ],
   "injectors": {
     "defaultRequire": 0

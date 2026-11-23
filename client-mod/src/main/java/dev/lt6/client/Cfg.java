@@ -288,7 +288,7 @@ public final class Cfg {
     }
 
     // Other older visuals remain disabled; new Color Grading has its own tab.
-    public static final Slider FAST_XP_TICKS = new Slider("cooldown", "Задержка Fast XP", 2, 10, 1, 3, "тик");
+    public static final Slider FAST_XP_TICKS = new Slider("cooldown", "Задержка Fast XP", 1, 4, 1, 1, "тик");
 	public static final Module FAST_XP = new Module("fast_xp", "Fast XP",
 		"Быстрее бросать пузырьки опыта при удержании ПКМ", PLAYER, false, FAST_XP_TICKS);
 	static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY, GRADING, HAND_VIEW,

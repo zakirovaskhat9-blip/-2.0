@@ -97,8 +97,10 @@ check('Cfg.JUMP_PATTERN' in screen and 'Cfg.JUMP_TINT' in screen,
       'Jump FX needs effect and colour settings')
 check('Cfg.UI_PART_STYLE' in screen and 'Cfg.UI_BLUR' in screen,
       'GUI particles and optional background blur must be configurable')
-check((JAVA/'FastXP.java').is_file() and 'FastXP.tick(mc)' in (JAVA/'LT6Client.java').read_text(encoding='utf-8'),
-      'Fast XP should be active from client ticks')
+check((JAVA/'mixin/LT6FastXPMixin.java').is_file()
+      and 'startUseItem' in (JAVA/'mixin/LT6FastXPMixin.java').read_text(encoding='utf-8')
+      and '@ModifyConstant' in (JAVA/'mixin/LT6FastXPMixin.java').read_text(encoding='utf-8'),
+      'Fast XP must reduce vanilla item-use cooldown without extra tick packets')
 check((JAVA/'mixin/LT6SkySunMixin.java').is_file()
       and 'renderSun' in (JAVA/'mixin/LT6SkySunMixin.java').read_text(encoding='utf-8'),
       'Hide only the vanilla sun when Custom Sky is active')
