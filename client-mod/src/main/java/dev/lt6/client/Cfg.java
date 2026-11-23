@@ -150,8 +150,11 @@ public final class Cfg {
 	public static final Color ESP_DIAMOND_TINT = new Color("diamond_color", "Цвет ромба", 0x1000000 + 0xB6F0FD);
 	public static final Slider ESP_DIAMOND_GLOW = new Slider("diamond_glow", "Свечение ромба", 0, 200, 10, 0, "%");
 	public static final Slider ESP_GLOW = new Slider("esp_glow", "Сила свечения", 0, 200, 10, 0, "%");
+	public static final Color ESP_TINT_SECONDARY = new Color("secondary_color", "Второй цвет ESP", 0x1000000); // black
+	public static final Choice ESP_PAINT = new Choice("paint", "Окраска",
+		0, "Один цвет", "Две половины", "Шахматная", "Градиент", "Переливание");
 	public static final Bool ESP_RED_ON_HIT = new Bool("red_on_hit", "Покраснение при ударе", false);
-	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Три стиля: Стандарт, Нурсултан ромб и Целестиал духи", VIS, true, ESP_STYLE, ESP_TURN_SECONDS, ESP_SIZE, ESP_TINT, ESP_DIAMOND_TINT, ESP_DIAMOND_GLOW, ESP_GLOW, ESP_RED_ON_HIT);
+	public static final Module TARGET_ESP = new Module("target_esp", "Target ESP", "Три стиля: Стандарт, Нурсултан ромб и Целестиал духи", VIS, true, ESP_STYLE, ESP_TURN_SECONDS, ESP_SIZE, ESP_TINT, ESP_DIAMOND_TINT, ESP_DIAMOND_GLOW, ESP_GLOW, ESP_RED_ON_HIT, ESP_TINT_SECONDARY, ESP_PAINT);
 
 	public static final Choice SKY_PRESET = new Choice("preset", "Небо", 0, SkyLib.names());
 	public static final Module SKY = new Module("sky", "Custom Sky", "Шесть небес, переключение без перезапуска", VIS, false, SKY_PRESET);
@@ -212,18 +215,36 @@ public final class Cfg {
 
 	public static final Color JUMP_TINT = new Color("color", "Цвет круга", 5);
 	public static final Slider JUMP_RADIUS = new Slider("radius", "Радиус", 0.6, 2.5, 0.1, 1.2, "м");
-	public static final Module JUMP_CIRCLES = new Module("jump_circles", "Jump Circles", "Цветная волна при прыжке и приземлении", PLAYER, false, JUMP_TINT, JUMP_RADIUS);
+	public static final Choice JUMP_PATTERN = new Choice("pattern", "Эффект прыжка",
+		1, "Круги", "Круги + искры", "Искры");
+	public static final Slider JUMP_DENSITY = new Slider("density", "Количество частиц", 8, 48, 2, 24, "шт");
+	public static final Slider JUMP_LIFE = new Slider("life", "Длительность", 8, 36, 2, 20, "тик");
+	public static final Module JUMP_CIRCLES = new Module("jump_circles", "Jump Circles",
+		"Круги и искры под ногами при прыжке и приземлении", VIS, true,
+		JUMP_TINT, JUMP_RADIUS, JUMP_PATTERN, JUMP_DENSITY, JUMP_LIFE);
 
 	static final Slider UI_OPACITY = new Slider("opacity", "Прозрачность плашек", 30, 100, 5, 72, "%");
 	static final Slider UI_ROUND = new Slider("round", "Скругление", 0, 8, 1, 4, " px");
 	static final Bool UI_GLOW = new Bool("glow", "Тени и свечение", false);
-	static final Bool UI_PART = new Bool("particles", "Частицы в меню", false);
-	static final Bool UI_BLUR = new Bool("blur", "Размытие меню", false);
-	static final Slider UI_WIDTH = new Slider("panel_width", "Ширина меню", 300, 900, 10, 686, "px");
-	static final Slider UI_HEIGHT = new Slider("panel_height", "Высота меню", 240, 700, 10, 438, "px");
+	static final Bool UI_PART = new Bool("particles", "Частицы в меню", true);
+	static final Choice UI_PART_STYLE = new Choice("particle_type", "Тип частиц",
+		0, "Снежинки", "Сферы", "Искры");
+	static final Color UI_PART_COLOR = new Color("particle_color", "Первый цвет частиц", 0x1000000 + 0xE0F3FF);
+	static final Color UI_PART_COLOR_2 = new Color("particle_color_2", "Второй цвет частиц", 0x1000000 + 0x7AC9FF);
+	static final Bool UI_PART_SHIMMER = new Bool("particle_shimmer", "Переливание цветов", true);
+	static final Slider UI_PART_SHIMMER_SPEED = new Slider("shimmer_speed", "Скорость переливания", 0.2, 4, 0.2, 1, "x");
+	static final Slider UI_PART_SIZE = new Slider("particle_size", "Размер частиц", 0.5, 5, 0.25, 1.5, "px");
+	static final Slider UI_PART_SPEED = new Slider("particle_speed", "Скорость полёта", 0.1, 3, 0.1, 0.7, "x");
+	static final Slider UI_PART_DENSITY = new Slider("particle_density", "Частиц на экране", 4, 64, 4, 20, "шт");
+	static final Bool UI_BLUR = new Bool("blur", "Размытие фона", false);
+	static final Slider UI_BLUR_LEVEL = new Slider("blur_strength", "Мягкость размытия", 0, 100, 5, 25, "%");
+	static final Slider UI_WIDTH = new Slider("panel_width", "Ширина меню", 320, 900, 10, 510, "px");
+	static final Slider UI_HEIGHT = new Slider("panel_height", "Высота меню", 280, 700, 10, 360, "px");
 	static final Slider UI_X = new Slider("panel_x", "Меню X", 0, 100, 0.1, 50, "%");
 	static final Slider UI_Y = new Slider("panel_y", "Меню Y", 0, 100, 0.1, 50, "%");
-	static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR, UI_WIDTH, UI_HEIGHT, UI_X, UI_Y);
+	static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR, UI_BLUR_LEVEL, UI_PART_STYLE, UI_PART_COLOR,
+		UI_PART_COLOR_2, UI_PART_SHIMMER, UI_PART_SHIMMER_SPEED,
+		UI_PART_SIZE, UI_PART_SPEED, UI_PART_DENSITY, UI_WIDTH, UI_HEIGHT, UI_X, UI_Y);
 
 
     // Live GPU colour grading. Percentage sliders are applied independently;
@@ -267,7 +288,11 @@ public final class Cfg {
     }
 
     // Other older visuals remain disabled; new Color Grading has its own tab.
-    static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY, GRADING, HAND_VIEW, ITEM_VIEW);
+    public static final Slider FAST_XP_TICKS = new Slider("cooldown", "Задержка Fast XP", 2, 10, 1, 3, "тик");
+	public static final Module FAST_XP = new Module("fast_xp", "Fast XP",
+		"Быстрее бросать пузырьки опыта при удержании ПКМ", PLAYER, false, FAST_XP_TICKS);
+	static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY, GRADING, HAND_VIEW,
+		ITEM_VIEW, JUMP_CIRCLES, FAST_XP);
 
 	static Options opts() { return Minecraft.getInstance().options; }
 
