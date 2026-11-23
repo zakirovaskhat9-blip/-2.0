@@ -88,9 +88,28 @@ check('this.fadeOutStart' in loading and 'setOverlay(null)' in loading,
       'Silent reload must eventually release the overlay')
 # Editing must remain possible after the first model drag.
 screen = (JAVA/'LT6Screen.java').read_text(encoding='utf-8')
-check('section == 1' in screen and 'section == 2' in screen
-      and '"Visuals", "Player", "GUI"' in screen,
-      'LT6 must expose Visuals, Player and GUI navigation')
+check('section == 2' in screen and 'section == 3' in screen
+      and '"V1", "V2", "Player", "GUI"' in screen,
+      'LT6 must expose Visuals I / Visuals II / Player / GUI navigation')
+check('section == 2 ? Cfg.FAST_XP' in screen
+      and 'section == 2) yy = renderFastXP' in screen
+      and 'area(sx, sy, sw, 51,' in screen,
+      'Player tab and its clickable card must route to Fast XP, not Target ESP')
+check('Cfg.HAND_VIEW || dragOwner == Cfg.ITEM_VIEW' in screen
+      and 'dragOwner.enabled = true' in screen,
+      'Moving a viewmodel slider must enable the hand or item module')
+viewmodel = (JAVA/'mixin/FirstPersonViewMixin.java').read_text(encoding='utf-8')
+check('@Redirect(method = "renderHandsWithItems"' in viewmodel
+      and 'require = 2' in viewmodel,
+      'First-person matrices must wrap both vanilla hand/item submissions')
+chatmixin = (JAVA/'mixin/LT6ChatEditMixin.java').read_text(encoding='utf-8')
+check('ChatHudEditor.drag(event)' in chatmixin
+      and 'ChatHudEditor.release(event)' in chatmixin
+      and 'ChatHudEditor.scroll(x, y, vertical)' in chatmixin,
+      'Chat must handle drag/release/wheel without old events')
+cfg = (JAVA/'Cfg.java').read_text(encoding='utf-8')
+check('JUMP_CIRCLES, HIT_COLOR, FAST_XP' in cfg,
+      'Restored Hit Color must persist through config')
 check('Cfg.ESP_TINT_SECONDARY' in screen and 'Cfg.ESP_PAINT' in screen,
       'Target ESP must offer secondary colour and colour patterns')
 check('Cfg.JUMP_PATTERN' in screen and 'Cfg.JUMP_TINT' in screen,
