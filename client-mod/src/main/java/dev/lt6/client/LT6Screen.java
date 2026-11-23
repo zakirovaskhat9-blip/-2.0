@@ -225,11 +225,11 @@ public final class LT6Screen extends Screen {
         g.enableScissor(contentX - 2, viewTop, contentX + contentW + 2, viewBottom);
         clip = true;
         int yy = viewTop + 6 - (int) scroll;
-        if (selected == 0) yy = renderFPS(g, mx, my, yy, m);
+        if (section == 1) yy = renderFastXP(g, yy, m);
+        else if (section == 2) yy = renderGUISettings(g, yy, m);
+        else if (selected == 0) yy = renderFPS(g, mx, my, yy, m);
         else if (selected == 1) yy = renderESP(g, mx, my, yy, m);
         else if (selected == 2) yy = renderSky(g, mx, my, yy, m);
-        else if (section == 1) yy = renderFastXP(g, yy, m);
-        else if (section == 2) yy = renderGUISettings(g, yy, m);
         else if (selected == 3) yy = renderGrading(g, mx, my, yy, m);
         else if (selected == 4 || selected == 5) yy = renderViewmodel(g, yy, selected == 4, m);
         else yy = renderJumpFX(g, yy, m);
