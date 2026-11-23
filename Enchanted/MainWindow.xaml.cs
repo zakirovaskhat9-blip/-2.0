@@ -291,9 +291,10 @@ public partial class MainWindow : Window
         }
         try
         {
+            CapeStudio.MigrateLegacy(file);
             CapePreview.Source = CapeStudio.Preview(file);
             CapeEmptyText.Visibility = Visibility.Collapsed;
-            CapeStatusText.Text = "Плащ готов. Включи Wavey Capes во вкладке «Моды» для физики ткани.";
+            CapeStatusText.Text = "Плащ готов: 2048×2048, правильные UV. Исходный PNG сохранён отдельно.";
         }
         catch (Exception ex)
         {
@@ -324,7 +325,8 @@ public partial class MainWindow : Window
         if (picker.ShowDialog(this) != true) return;
         try
         {
-            CapeStudio.Import(picker.FileName, Dirs.CapeFile("1.21.11"));
+            CapeStudio.Import(picker.FileName, Dirs.CapeFile("1.21.11"),
+                CapeTemplateBox.IsChecked == true);
             cfg.CapeEnabled = true;
             CapeEnabledBox.IsChecked = true;
             cfg.Save();
@@ -340,6 +342,7 @@ public partial class MainWindow : Window
     {
         try {
             File.Delete(Dirs.CapeFile("1.21.11"));
+            File.Delete(CapeStudio.SourceFile(Dirs.CapeFile("1.21.11")));
             cfg.CapeEnabled = false;
             CapeEnabledBox.IsChecked = false;
             cfg.Save();

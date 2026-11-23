@@ -49,9 +49,11 @@ public final class CapeTextures {
             if (mod == lastModified && ready) return;
             try (var input = Files.newInputStream(file)) {
                 NativeImage image = NativeImage.read(input);
-                if (image.getWidth() != 64 || image.getHeight() != 32) {
+                int width = image.getWidth(), height = image.getHeight();
+                if (width != height || width < 64 || width > 4096 || width % 64 != 0) {
                     image.close();
-                    LOGGER.warn("Custom cape is not a 64x32 PNG: {}", file);
+                    LOGGER.warn("Custom cape must be a square 64x64 UV atlas, got {}x{}: {}",
+                            width, height, file);
                     ready = false;
                     return;
                 }
