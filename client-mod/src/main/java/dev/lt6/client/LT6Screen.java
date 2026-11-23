@@ -37,6 +37,7 @@ public final class LT6Screen extends Screen {
     private static int selected = 0;
     private static int section = 0; // 0 Visuals I, 1 Visuals II, 2 Player, 3 GUI
     private static int guiPage = 0; // 0 Appearance, 1 Particles
+    private static boolean layoutInitialized;
     private int x, y, w, h, sideW, contentX, contentW, viewTop, viewBottom, contentHeight;
     private double scroll;
     private Cfg.Slider dragging;
@@ -96,10 +97,14 @@ public final class LT6Screen extends Screen {
     public void render(GuiGraphics g, int mx, int my, float delta) {
         hits.clear();
         Gfx.alphaMul = 1f;
-        // Native Minecraft GUI blur; no post-effect is left running after close.
-        if (Cfg.UI_BLUR.v && Cfg.UI_BLUR_LEVEL.v > 0
-                && minecraft != null && minecraft.level != null) {
-            g.blurBeforeThisStratum();
+        // Never apply the Minecraft postprocess blur to the entire game.
+        // Only the first panel opening enforces the compact half-screen size;
+        // afterwards resizing is unrestricted within the viewport.
+        if (!layoutInitialized) {
+            Cfg.UI_WIDTH.set(Math.min(Cfg.UI_WIDTH.v, Math.max(250, width * .50)));
+            Cfg.UI_HEIGHT.set(Math.min(Cfg.UI_HEIGHT.v, Math.max(175, height * .50)));
+            layoutInitialized = true;
+            Cfg.save();
         }
         this.w = Math.max(1, Math.min(width - 16, (int)Cfg.UI_WIDTH.v));
         this.h = Math.max(1, Math.min(height - 16, (int)Cfg.UI_HEIGHT.v));
@@ -112,14 +117,19 @@ public final class LT6Screen extends Screen {
         this.viewTop = y + 78;
         this.viewBottom = y + h - 20;
 
-        // No full-screen dark veil. Only the small draggable panel is drawn.
+        // The background game remains fully visible outside this panel.
+        int opacity = Math.max(190, Math.min(250, (int)(Cfg.UI_OPACITY.v * 2.55)));
+        if (Cfg.UI_BLUR.v) {
+            // Local frosted-glass effect, not a global framebuffer blur.
+            int alpha = Math.max(40, Math.min(145, (int)(Cfg.UI_BLUR_LEVEL.v * 1.25)));
+            Gfx.rr(g, x - 2, y - 2, w + 4, h + 4, 11,
+                    (alpha << 24) | 0x172C40);
+        }
         if (Cfg.UI_GLOW.v) Gfx.glow(g, x, y, w, h, 9, 0x000000, .25f, 2);
-        // Constrain all decorative particles to the menu, not the entire game.
+        Gfx.rr(g, x, y, w, h, 9, (opacity << 24) | (BG & 0xFFFFFF));
         g.enableScissor(x + 2, y + 2, x + w - 2, y + h - 2);
         MenuParticles.render(g, width, height, x, y, w, h);
         g.disableScissor();
-        int opacity = Math.max(190, Math.min(250, (int)(Cfg.UI_OPACITY.v * 2.55)));
-        Gfx.rr(g, x, y, w, h, 9, (opacity << 24) | (BG & 0xFFFFFF));
         Gfx.rr(g, x + 1, y + 1, sideW, h - 2, 10, SIDE);
         Gfx.ring(g, x, y, w, h, 11, 1, 0x345B7DA2);
         Gfx.rr(g, x + 9, y + 12, 3, 22, 1, ACCENT);
@@ -590,7 +600,7 @@ public final class LT6Screen extends Screen {
                 resizingPanel = true;
                 return true;
             }
-            if (hover((int)event.x(), (int)event.y(), x, y, w, 55)) {
+            if (hover((int)event.x(), (int)event.y(), x, y, w, 44)) {
                 movingPanel = true;
                 return true;
             }
@@ -610,8 +620,10 @@ public final class LT6Screen extends Screen {
             return true;
         }
         if (resizingPanel) {
-            Cfg.UI_WIDTH.set(startPanelWidth + event.x() - startMouseX);
-            Cfg.UI_HEIGHT.set(startPanelHeight + event.y() - startMouseY);
+            Cfg.UI_WIDTH.set(Math.min(width - startPixelX - 8,
+                    startPanelWidth + event.x() - startMouseX));
+            Cfg.UI_HEIGHT.set(Math.min(height - startPixelY - 8,
+                    startPanelHeight + event.y() - startMouseY));
             int newWidth = Math.min(width - 16, (int)Cfg.UI_WIDTH.v);
             int newHeight = Math.min(height - 16, (int)Cfg.UI_HEIGHT.v);
             Cfg.UI_X.set(startPixelX * 100.0 / Math.max(1, width - newWidth));

@@ -433,10 +433,16 @@ public final class Cfg {
 					if (so.has(s.id)) s.set(so.get(s.id).getAsDouble());
 				}
 			}
-            // Migrate only known old default window sizes. Never overwrite
-            // sizes the player chose manually.
-            if (UI_WIDTH.v == 686 || UI_WIDTH.v == 510 || UI_WIDTH.v == 460) UI_WIDTH.set(330);
-            if (UI_HEIGHT.v == 438 || UI_HEIGHT.v == 360 || UI_HEIGHT.v == 320) UI_HEIGHT.set(220);
+            // Previous GUI versions could persist oversized window dimensions.
+            // Reset the legacy layout only once; future user sizes remain saved.
+            int layoutVersion = o.has("gui_layout_version")
+                    ? o.get("gui_layout_version").getAsInt() : 0;
+            if (layoutVersion < 3) {
+                UI_WIDTH.set(330);
+                UI_HEIGHT.set(220);
+                UI_X.set(50);
+                UI_Y.set(50);
+            }
 
 			int oldVersion = o.has("viewmodel_version") ? o.get("viewmodel_version").getAsInt() : 0;
 			if (oldVersion < VIEWMODEL_CONFIG_VERSION) {
@@ -460,6 +466,7 @@ public final class Cfg {
 			JsonObject o = new JsonObject();
 			o.addProperty("theme", theme);
 			o.addProperty("viewmodel_version", VIEWMODEL_CONFIG_VERSION);
+			o.addProperty("gui_layout_version", 3);
 			JsonObject mods = new JsonObject();
 			for (Module m : ALL) {
 				JsonObject mo = new JsonObject();
