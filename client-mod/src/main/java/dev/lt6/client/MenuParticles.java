@@ -16,7 +16,7 @@ public final class MenuParticles {
 
     public static void render(GuiGraphics g, int width, int height,
                               int panelX, int panelY, int panelW, int panelH) {
-        if (!Cfg.UI_PART.v || width < 20 || height < 20) return;
+        if (!Cfg.UI_PART.v || panelW < 20 || panelH < 20) return;
         int n = Math.min(64, Math.max(4, (int)Cfg.UI_PART_DENSITY.v));
         int mode = Cfg.UI_PART_STYLE.idx;
         double time = System.nanoTime() * 1.0e-9;
@@ -31,10 +31,10 @@ public final class MenuParticles {
         for (int i = 0; i < n; i++) {
             double u = hash(i * 17 + 9), v = hash(i * 23 + 41);
             double drift = (hash(i * 31 + 5) - .5) * 12.0;
-            double x = width * u + Math.sin(time * speed * .35 + i * .6) * (8 + 4 * u);
+            double x = panelX + panelW * u + Math.sin(time * speed * .35 + i * .6) * (8 + 4 * u);
             double fall = (time * (6.0 + hash(i * 11 + 3) * 22.0) * speed);
-            double y = ((height * v + fall) % (height + 20)) - 10;
-            x = ((x + drift + width) % width);
+            double y = panelY + ((panelH * v + fall) % (panelH + 20)) - 10;
+            x = panelX + ((x + drift - panelX + panelW) % panelW);
             int px = (int)Math.round(x), py = (int)Math.round(y);
 
             float blend = (float)hash(i * 7 + 6);
