@@ -1,7 +1,5 @@
 package dev.lt6.client;
 
-import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
-import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -26,15 +24,9 @@ public final class ChatHudEditor {
     private static final boolean[] hasLast = new boolean[Target.values().length];
     private ChatHudEditor() {}
 
-    public static void register() {
-        ScreenEvents.AFTER_INIT.register((mc, screen, width, height) -> {
-            if (!(screen instanceof ChatScreen)) return;
-            dragging = Target.NONE;
-            ScreenMouseEvents.allowMouseClick(screen).register((s, event) -> !click(event));
-            ScreenMouseEvents.allowMouseDrag(screen).register((s, event, dx, dy) -> !drag(event));
-            ScreenMouseEvents.allowMouseRelease(screen).register((s, event) -> !release(event));
-            ScreenMouseEvents.allowMouseScroll(screen).register((s, x, y, horiz, amount) -> !scroll(x, y, amount));
-        });
+    /** Direct ChatScreen mixin invokes these handlers; no per-screen event race. */
+    public static void onChatOpened() {
+        dragging = Target.NONE;
     }
 
     private static int width() {
@@ -180,7 +172,7 @@ public final class ChatHudEditor {
         return Target.NONE;
     }
 
-    private static boolean click(MouseButtonEvent event) {
+    public static boolean click(MouseButtonEvent event) {
         if (event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
         Target selected = hit(event.x(), event.y());
         if (selected == Target.NONE) return false;
@@ -195,7 +187,7 @@ public final class ChatHudEditor {
         hasLast[selected.ordinal()] = true;
         return true;
     }
-    private static boolean drag(MouseButtonEvent event) {
+    public static boolean drag(MouseButtonEvent event) {
         if (dragging == Target.NONE) return false;
         if (dragging == Target.FPS) {
             xSetting(dragging).set(startX + (event.x() - startMouseX) * 100.0 / Math.max(1, width()));
@@ -209,7 +201,7 @@ public final class ChatHudEditor {
         hasLast[dragging.ordinal()] = true;
         return true;
     }
-    private static boolean release(MouseButtonEvent event) {
+    public static boolean release(MouseButtonEvent event) {
         if (dragging == Target.NONE || event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
         // Keep the final cursor position as the next editable anchor.
         lastX[dragging.ordinal()] = event.x();
@@ -219,7 +211,7 @@ public final class ChatHudEditor {
         dragging = Target.NONE;
         return true;
     }
-    private static boolean scroll(double x, double y, double amount) {
+    public static boolean scroll(double x, double y, double amount) {
         if (amount == 0) return false;
         Target target = hit(x, y);
         if (target == Target.NONE) return false;
