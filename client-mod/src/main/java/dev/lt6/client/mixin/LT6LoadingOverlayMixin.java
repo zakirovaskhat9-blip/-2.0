@@ -41,9 +41,9 @@ public abstract class LT6LoadingOverlayMixin {
         else
             this.minecraft.gui.renderDeferredSubtitles();
 
-        // Only release the overlay after vanilla has completed the reload,
-        // invoked onFinish and initialized the screen again.
-        if (this.fadeOutStart >= 0L && now - this.fadeOutStart >= 2000L)
+        // The reload is complete and onFinish has reinitialized the screen.
+        // No visible fade is needed: release input immediately, not 2 seconds later.
+        if (this.fadeOutStart >= 0L)
             this.minecraft.setOverlay(null);
         ci.cancel();
     }
