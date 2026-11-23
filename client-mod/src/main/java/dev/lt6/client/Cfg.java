@@ -238,8 +238,8 @@ public final class Cfg {
 	static final Slider UI_PART_DENSITY = new Slider("particle_density", "Частиц на экране", 4, 64, 4, 20, "шт");
 	static final Bool UI_BLUR = new Bool("blur", "Размытие фона", false);
 	static final Slider UI_BLUR_LEVEL = new Slider("blur_strength", "Мягкость размытия", 0, 100, 5, 25, "%");
-	static final Slider UI_WIDTH = new Slider("panel_width", "Ширина меню", 320, 900, 10, 510, "px");
-	static final Slider UI_HEIGHT = new Slider("panel_height", "Высота меню", 280, 700, 10, 360, "px");
+	static final Slider UI_WIDTH = new Slider("panel_width", "Ширина меню", 330, 900, 10, 460, "px");
+	static final Slider UI_HEIGHT = new Slider("panel_height", "Высота меню", 270, 700, 10, 320, "px");
 	static final Slider UI_X = new Slider("panel_x", "Меню X", 0, 100, 0.1, 50, "%");
 	static final Slider UI_Y = new Slider("panel_y", "Меню Y", 0, 100, 0.1, 50, "%");
 	static final Module STYLE = new Module("style", "Интерфейс", "", "UI", true, UI_OPACITY, UI_ROUND, UI_GLOW, UI_PART, UI_BLUR, UI_BLUR_LEVEL, UI_PART_STYLE, UI_PART_COLOR,
@@ -292,7 +292,7 @@ public final class Cfg {
 	public static final Module FAST_XP = new Module("fast_xp", "Fast XP",
 		"Быстрее бросать пузырьки опыта при удержании ПКМ", PLAYER, false, FAST_XP_TICKS);
 	static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY, GRADING, HAND_VIEW,
-		ITEM_VIEW, JUMP_CIRCLES, FAST_XP);
+		ITEM_VIEW, JUMP_CIRCLES, HIT_COLOR, FAST_XP);
 
 	static Options opts() { return Minecraft.getInstance().options; }
 
@@ -384,6 +384,10 @@ public final class Cfg {
 					if (so.has(s.id)) s.set(so.get(s.id).getAsDouble());
 				}
 			}
+            // Migrate only known old default window sizes. Never overwrite
+            // sizes the player chose manually.
+            if (UI_WIDTH.v == 686 || UI_WIDTH.v == 510) UI_WIDTH.set(460);
+            if (UI_HEIGHT.v == 438 || UI_HEIGHT.v == 360) UI_HEIGHT.set(320);
 		} catch (Exception error) {
             LOGGER.warn("Cannot read LT6 configuration {}. Defaults will be used.", FILE, error);
 		}

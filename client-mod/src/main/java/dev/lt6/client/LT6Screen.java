@@ -374,7 +374,7 @@ public final class LT6Screen extends Screen {
     }
 
     private int renderViewmodel(GuiGraphics g, int yy, boolean hands, Cfg.Module module) {
-        yy = note(g, yy, "Чат (T): хватай предмет/руку, колесо = размер");
+        yy = note(g, yy, "Чат (T): тяни рукой; Shift — выбрать руку; колесо — размер");
         Gfx.str(g, font, "ОСНОВНАЯ РУКА / ПРЕДМЕТ", contentX + 6, yy + 3, MUTED);
         yy += 22;
         Cfg.Slider[] main = hands
@@ -529,6 +529,10 @@ public final class LT6Screen extends Screen {
         if (dragging == null || dragOwner == null || dragW < 1) return;
         double fraction = Math.max(0d, Math.min(1d, (mouseX - dragX) / dragW));
         dragging.set(dragging.min + fraction * (dragging.max - dragging.min));
+        // Viewmodel sliders used to update saved numbers while their
+        // modules stayed disabled, so hands appeared completely broken.
+        if (dragOwner == Cfg.HAND_VIEW || dragOwner == Cfg.ITEM_VIEW
+                || dragOwner == Cfg.FAST_XP) dragOwner.enabled = true;
         if (dragOwner == Cfg.GRADING) {
             Cfg.GRADING_PRESET.idx = Cfg.GRADING_PRESET.opts.length - 1; // Custom
             Cfg.GRADING.enabled = true;
