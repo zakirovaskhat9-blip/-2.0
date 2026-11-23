@@ -4,36 +4,44 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.entity.HumanoidArm;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Click the visible first-person hand/item directly while chat (T) is open.
- * The hit regions follow the user's viewmodel offsets. No on-screen handles,
- * crosses, labels, panels or click-blocking transparent overlays.
+ * Direct hit regions for independent hand and item editing in Chat (T).
+ * Nothing is drawn over the screen. The empty main hand is always selectable;
+ * the empty offhand can be shown using the hand-view module option.
+ *
+ * Click/drag a visible hand or item. Wheel = scale. Shift selects the arm
+ * under a held item; Ctrl + wheel = depth. Keep the chat input usable.
  */
 public final class ChatHudEditor {
     private enum Target { NONE, FPS, MAIN_HAND, OFF_HAND, MAIN_ITEM, OFF_ITEM }
-
+    private static final Target[] HANDS = {Target.MAIN_HAND, Target.OFF_HAND};
+    private static final Target[] ITEMS = {Target.MAIN_ITEM, Target.OFF_ITEM};
     private static Target dragging = Target.NONE;
-    private static double startMouseX, startMouseY, startX, startY;
-    // Preserve each dragged object's last screen-space location across chat
-    // re-openings. The original mesh bounds are approximate; without these
-    // anchors the user cannot grab an item again after moving it far away.
+    private static double downX, downY, originalX, originalY;
+
+    // Keep a grab point after releasing the mouse so every object remains
+    // draggable repeatedly even after an extreme offset.
     private static final double[] lastX = new double[Target.values().length];
     private static final double[] lastY = new double[Target.values().length];
-    private static final boolean[] hasLast = new boolean[Target.values().length];
-    private ChatHudEditor() {}
+    private static final boolean[] anchored = new boolean[Target.values().length];
 
-    /** Direct ChatScreen mixin invokes these handlers; no per-screen event race. */
-    public static void onChatOpened() {
-        dragging = Target.NONE;
-    }
+    private ChatHudEditor() { }
 
-    private static int width() {
-        return Minecraft.getInstance().getWindow().getGuiScaledWidth();
+    public static void onChatOpened() { dragging = Target.NONE; }
+
+    private static Minecraft mc() { return Minecraft.getInstance(); }
+    private static int width() { return mc().getWindow().getGuiScaledWidth(); }
+    private static int height() { return mc().getWindow().getGuiScaledHeight(); }
+
+    private static boolean isMain(Target t) {
+        return t == Target.MAIN_HAND || t == Target.MAIN_ITEM;
     }
-    private static int height() {
-        return Minecraft.getInstance().getWindow().getGuiScaledHeight();
+    private static boolean isItem(Target t) {
+        return t == Target.MAIN_ITEM || t == Target.OFF_ITEM;
     }
 
     private static Cfg.Slider xSetting(Target t) {
@@ -82,148 +90,145 @@ public final class ChatHudEditor {
         };
     }
 
-    private static boolean inside(double x, double y, double cx, double cy,
-                                  double halfW, double halfH) {
-        return x >= cx - halfW && x <= cx + halfW
-                && y >= cy - halfH && y <= cy + halfH;
+    private static boolean visible(Target t) {
+        if (mc().player == null) return false;
+        boolean main = isMain(t);
+        var held = main ? mc().player.getMainHandItem() : mc().player.getOffhandItem();
+        if (isItem(t)) return !held.isEmpty();
+        if (held.isEmpty()) {
+            if (main) return true;  // Vanilla draws the bare MAIN arm.
+            return Cfg.HAND_VIEW.enabled && Cfg.SHOW_EMPTY_OFFHAND.v
+                    || mc().player.getMainHandItem().has(DataComponents.MAP_ID);
+        }
+        return held.has(DataComponents.MAP_ID)
+                || (Cfg.HAND_VIEW.enabled && Cfg.SHOW_HAND_WITH_ITEM.v);
     }
 
     /**
-     * First-person render meshes are submitted in 3D, not exposed as GUI
-     * widgets. Approximate their clickable silhouette from screen anchors,
-     * active scales and user transforms, plus exact cursor anchors saved after
-     * each successful drag. Shift prioritizes the hand under a held item.
+     * Independent first-person anchors. The item anchor intentionally ignores
+     * hand offsets/scale: changing a hand must not drag the held item with it.
+     * Handedness follows the player's main arm rather than assuming right hand.
      */
-    private static Target hit(double x, double y) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || !(mc.screen instanceof ChatScreen)) return Target.NONE;
+    private static Target inGroup(Target[] group, double px, double py) {
         int w = width(), h = height();
-
-        if (Cfg.FPS.enabled) {
-            int fx = Overlay.left(w, mc.font), fy = Overlay.top(h);
-            if (x >= fx - 3 && x <= fx + Overlay.panelWidth(mc.font) * Overlay.scale() + 3
-                    && y >= fy - 3 && y <= fy + 25 * Overlay.scale() + 3) return Target.FPS;
-        }
-
-        // The chat entry box and its cursor must always remain interactive.
-        if (y >= h - 24) return Target.NONE;
-
-        boolean preferArm = mc.hasShiftDown();
-        // Shift prefers the hand beneath an item. If no hand is under the
-        // cursor, still allow the item to be selected for depth adjustment.
-        for (int pass = 0; pass < (preferArm ? 2 : 1); pass++) {
         Target best = Target.NONE;
-        double bestScore = Double.POSITIVE_INFINITY;
+        double nearest = Double.POSITIVE_INFINITY;
+        for (Target t : group) {
+            if (!visible(t)) continue;
+            boolean item = isItem(t);
+            boolean main = isMain(t);
+            int direction = mc().player.getMainArm() == HumanoidArm.RIGHT ? 1 : -1;
+            double sign = main ? direction : -direction;
+            double scale = scaleSetting(t).v;
+            double cx = w * (0.5 + sign * (item ? .265 : .39))
+                    + xSetting(t).v * w * (item ? .115 : .17);
+            double cy = h * (item ? .70 : .87)
+                    - ySetting(t).v * h * (item ? .13 : .17);
+            double halfX = w * (item ? .105 : .12)
+                    * Math.max(.5, Math.min(2.4, scale));
+            double halfY = h * (item ? .18 : .13)
+                    * Math.max(.5, Math.min(2.4, scale));
 
-        for (Target t : new Target[]{Target.MAIN_ITEM, Target.OFF_ITEM, Target.MAIN_HAND, Target.OFF_HAND}) {
-            boolean main = t == Target.MAIN_HAND || t == Target.MAIN_ITEM;
-            boolean item = t == Target.MAIN_ITEM || t == Target.OFF_ITEM;
-            if (item && (main ? mc.player.getMainHandItem() : mc.player.getOffhandItem()).isEmpty())
-                continue;
-            if (preferArm && ((pass == 0) == item)) continue;
-
-            double sign = main ? 1 : -1;
-            double handX = main ? Cfg.MAIN_HAND_X.v : Cfg.OFF_HAND_X.v;
-            double handY = main ? Cfg.MAIN_HAND_Y.v : Cfg.OFF_HAND_Y.v;
-            double handScale = main ? Cfg.MAIN_HAND_SIZE.v : Cfg.OFF_HAND_SIZE.v;
-            double localX = main ? Cfg.ITEM_VIEW_X.v : Cfg.ITEM_OFF_X.v;
-            double localY = main ? Cfg.ITEM_VIEW_Y.v : Cfg.ITEM_OFF_Y.v;
-            double itemScale = main ? Cfg.ITEM_VIEW_SIZE.v : Cfg.ITEM_OFF_SIZE.v;
-
-            // The parent-hand transform moves its item along with the hand;
-            // the item transform is relative to that parent.
-            double cx = item
-                    ? w * (0.5 + sign * .265)
-                            + w * (.17 * handX + .115 * localX * handScale)
-                    : w * (0.5 + sign * .39) + w * .17 * handX;
-            double cy = item
-                    ? h * .70 - h * (.17 * handY + .13 * localY * handScale)
-                    : h * .87 - h * .17 * handY;
-            double radiusX = item
-                    ? w * .105 * Math.max(.55, Math.min(2.2, handScale * itemScale))
-                    : w * .12 * Math.max(.55, Math.min(2.0, handScale));
-            double radiusY = item
-                    ? h * .18 * Math.max(.55, Math.min(2.2, handScale * itemScale))
-                    : h * .13 * Math.max(.55, Math.min(2.0, handScale));
-
-            // Last drag end is a much more faithful screen-space position
-            // than a synthetic perspective projection. Give it priority so
-            // repeated moves and wheel resizing keep working immediately.
-            if (hasLast[t.ordinal()]) {
-                double lx = lastX[t.ordinal()], ly = lastY[t.ordinal()];
-                double ax = Math.max(radiusX, 22), ay = Math.max(radiusY, 20);
-                double anchored = Math.pow((x - lx) / ax, 2)
-                                + Math.pow((y - ly) / ay, 2);
-                if (anchored <= 1.0 && anchored - .6 < bestScore) {
+            // Saved cursor anchor is used only while near the calculated region
+            // or the previous release point, including after moving far away.
+            if (anchored[t.ordinal()]) {
+                double hx = Math.max(halfX, 23), hy = Math.max(halfY, 22);
+                double d = Math.pow((px - lastX[t.ordinal()]) / hx, 2)
+                        + Math.pow((py - lastY[t.ordinal()]) / hy, 2);
+                if (d <= 1.0 && d - .6 < nearest) {
+                    nearest = d - .6;
                     best = t;
-                    bestScore = anchored - .6;
                 }
             }
-
-            double dist = Math.pow((x - cx) / Math.max(radiusX, 16), 2)
-                        + Math.pow((y - cy) / Math.max(radiusY, 16), 2);
-            if (dist <= 1.0 && dist < bestScore) {
+            double d = Math.pow((px - cx) / Math.max(15, halfX), 2)
+                    + Math.pow((py - cy) / Math.max(15, halfY), 2);
+            if (d <= 1.0 && d < nearest) {
+                nearest = d;
                 best = t;
-                bestScore = dist;
             }
         }
-        if (best != Target.NONE) return best;
+        return best;
+    }
+
+    private static Target hit(double px, double py) {
+        Minecraft client = mc();
+        if (client.player == null || !(client.screen instanceof ChatScreen))
+            return Target.NONE;
+        int w = width(), h = height();
+
+        // Chat input, selection and chat history always take priority.
+        if (py >= h - 24 || py < h * .28) return Target.NONE;
+
+        if (Cfg.FPS.enabled) {
+            int fx = Overlay.left(w, client.font), fy = Overlay.top(h);
+            if (px >= fx-3 && px <= fx + Overlay.panelWidth(client.font) * Overlay.scale()+3
+                    && py >= fy-3 && py <= fy + 25 * Overlay.scale()+3)
+                return Target.FPS;
         }
-        return Target.NONE;
+
+        Target first = client.hasShiftDown() ? inGroup(HANDS, px, py) : inGroup(ITEMS, px, py);
+        if (first != Target.NONE) return first;
+        return client.hasShiftDown() ? inGroup(ITEMS, px, py) : inGroup(HANDS, px, py);
     }
 
     public static boolean click(MouseButtonEvent event) {
         if (event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
-        Target selected = hit(event.x(), event.y());
-        if (selected == Target.NONE) return false;
-        dragging = selected;
-        startMouseX = event.x();
-        startMouseY = event.y();
-        startX = xSetting(selected).v;
-        startY = ySetting(selected).v;
-        owner(selected).enabled = true;
-        lastX[selected.ordinal()] = event.x();
-        lastY[selected.ordinal()] = event.y();
-        hasLast[selected.ordinal()] = true;
+        Target t = hit(event.x(), event.y());
+        if (t == Target.NONE) return false;
+        dragging = t;
+        downX = event.x();
+        downY = event.y();
+        originalX = xSetting(t).v;
+        originalY = ySetting(t).v;
+        owner(t).enabled = true;
+        lastX[t.ordinal()] = event.x();
+        lastY[t.ordinal()] = event.y();
+        anchored[t.ordinal()] = true;
         return true;
     }
+
     public static boolean drag(MouseButtonEvent event) {
         if (dragging == Target.NONE) return false;
         if (dragging == Target.FPS) {
-            xSetting(dragging).set(startX + (event.x() - startMouseX) * 100.0 / Math.max(1, width()));
-            ySetting(dragging).set(startY + (event.y() - startMouseY) * 100.0 / Math.max(1, height()));
+            xSetting(dragging).set(originalX + (event.x() - downX) * 100.0 / Math.max(1, width()));
+            ySetting(dragging).set(originalY + (event.y() - downY) * 100.0 / Math.max(1, height()));
         } else {
-            xSetting(dragging).set(startX + (event.x() - startMouseX) / Math.max(1.0, width() * 0.17));
-            ySetting(dragging).set(startY - (event.y() - startMouseY) / Math.max(1.0, height() * 0.17));
+            double sx = isItem(dragging) ? .115 : .17;
+            double sy = isItem(dragging) ? .13 : .17;
+            xSetting(dragging).set(originalX + (event.x() - downX) / Math.max(1.0, width() * sx));
+            ySetting(dragging).set(originalY - (event.y() - downY) / Math.max(1.0, height() * sy));
         }
         lastX[dragging.ordinal()] = event.x();
         lastY[dragging.ordinal()] = event.y();
-        hasLast[dragging.ordinal()] = true;
+        anchored[dragging.ordinal()] = true;
         return true;
     }
+
     public static boolean release(MouseButtonEvent event) {
-        if (dragging == Target.NONE || event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
-        // Keep the final cursor position as the next editable anchor.
+        if (dragging == Target.NONE || event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT)
+            return false;
         lastX[dragging.ordinal()] = event.x();
         lastY[dragging.ordinal()] = event.y();
-        hasLast[dragging.ordinal()] = true;
+        anchored[dragging.ordinal()] = true;
         Cfg.changed(owner(dragging));
         dragging = Target.NONE;
         return true;
     }
-    public static boolean scroll(double x, double y, double amount) {
+
+    public static boolean scroll(double px, double py, double amount) {
         if (amount == 0) return false;
-        Target target = hit(x, y);
-        if (target == Target.NONE) return false;
-        boolean changeDepth = Minecraft.getInstance().hasShiftDown() && target != Target.FPS;
-        Cfg.Slider setting = changeDepth ? depthSetting(target) : scaleSetting(target);
-        setting.set(setting.v + amount * (changeDepth ? 0.05 : 0.1));
-        owner(target).enabled = true;
-        Cfg.changed(owner(target));
+        Target t = hit(px, py);
+        if (t == Target.NONE) return false;
+        // Wheel always scales the hovered visible hand/item. Shift selects a
+        // hand under an item; Ctrl + wheel changes depth instead of size.
+        boolean depth = mc().hasControlDown() && t != Target.FPS;
+        Cfg.Slider setting = depth ? depthSetting(t) : scaleSetting(t);
+        setting.set(setting.v + amount * (depth ? .05 : .1));
+        owner(t).enabled = true;
+        Cfg.changed(owner(t));
         return true;
     }
 
-    // Called by the existing chat mixin. Intentional: no crosses or grips.
-    public static void render(GuiGraphics graphics, int mouseX, int mouseY) {
-    }
+    // No crosses, plus signs, panels or other blocking HUD objects in chat.
+    public static void render(GuiGraphics gui, int mouseX, int mouseY) { }
 }
