@@ -183,8 +183,15 @@ public final class Cfg {
 	public static final Slider OFF_HAND_X = new Slider("off_x", "Вторая: X", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider OFF_HAND_Y = new Slider("off_y", "Вторая: Y", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider OFF_HAND_Z = new Slider("off_z", "Вторая: Z", -1.5, 1.5, 0.05, 0, "");
-	public static final Module HAND_VIEW = new Module("hand_view", "Viewmodel Hands", "Положение и масштаб рук от первого лица", VIS, false,
-		MAIN_HAND_SIZE, MAIN_HAND_X, MAIN_HAND_Y, MAIN_HAND_Z, OFF_HAND_SIZE, OFF_HAND_X, OFF_HAND_Y, OFF_HAND_Z);
+	public static final Bool SHOW_EMPTY_OFFHAND = new Bool("empty_offhand_visible",
+		"Показывать пустую вторую руку", false);
+	public static final Bool SHOW_HAND_WITH_ITEM = new Bool("hand_with_item",
+		"Показывать руку рядом с предметом", false);
+	public static final Module HAND_VIEW = new Module("hand_view", "Viewmodel Hands",
+		"Только модель руки: независимо от предметов", VIS, false,
+		MAIN_HAND_SIZE, MAIN_HAND_X, MAIN_HAND_Y, MAIN_HAND_Z,
+		OFF_HAND_SIZE, OFF_HAND_X, OFF_HAND_Y, OFF_HAND_Z,
+		SHOW_EMPTY_OFFHAND, SHOW_HAND_WITH_ITEM);
 
 	// Дополнительные преобразования только модели предмета, независимо от общей руки.
 	public static final Slider ITEM_VIEW_SIZE = new Slider("item_scale", "Размер предмета", 0.3, 2.5, 0.05, 1.0, "x");
@@ -195,7 +202,7 @@ public final class Cfg {
 	public static final Slider ITEM_OFF_X = new Slider("off_item_x", "Предмет слева: X", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_OFF_Y = new Slider("off_item_y", "Предмет слева: Y", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_OFF_Z = new Slider("off_item_z", "Предмет слева: Z", -1.5, 1.5, 0.05, 0, "");
-	public static final Module ITEM_VIEW = new Module("item_view", "Viewmodel Items", "Настройка предметов отдельно для каждой руки", VIS, false,
+	public static final Module ITEM_VIEW = new Module("item_view", "Viewmodel Items", "Только предметы: не сдвигает модели рук", VIS, false,
 		ITEM_VIEW_SIZE, ITEM_VIEW_X, ITEM_VIEW_Y, ITEM_VIEW_Z, ITEM_OFF_SIZE, ITEM_OFF_X, ITEM_OFF_Y, ITEM_OFF_Z);
 
 	public static final Color HIT_TINT = new Color("color", "Цвет попадания", 1);
@@ -363,6 +370,46 @@ public final class Cfg {
 		changed(m);
 	}
 
+	// New renderer is not a child transform of the held item. One-time
+	// migration resets only old viewmodel translations, never other modules.
+	private static final int VIEWMODEL_CONFIG_VERSION = 2;
+
+	static void resetViewmodelSettings(Module module) {
+		for (Setting setting : module.settings) setting.reset();
+	}
+
+	static void resetViewmodelHand(boolean main) {
+		if (main) {
+			MAIN_HAND_SIZE.reset();
+			MAIN_HAND_X.reset();
+			MAIN_HAND_Y.reset();
+			MAIN_HAND_Z.reset();
+		} else {
+			OFF_HAND_SIZE.reset();
+			OFF_HAND_X.reset();
+			OFF_HAND_Y.reset();
+			OFF_HAND_Z.reset();
+		}
+		HAND_VIEW.enabled = true;
+		changed(HAND_VIEW);
+	}
+
+	static void resetViewmodelItem(boolean main) {
+		if (main) {
+			ITEM_VIEW_SIZE.reset();
+			ITEM_VIEW_X.reset();
+			ITEM_VIEW_Y.reset();
+			ITEM_VIEW_Z.reset();
+		} else {
+			ITEM_OFF_SIZE.reset();
+			ITEM_OFF_X.reset();
+			ITEM_OFF_Y.reset();
+			ITEM_OFF_Z.reset();
+		}
+		ITEM_VIEW.enabled = true;
+		changed(ITEM_VIEW);
+	}
+
 	static void load() {
 		try {
 			if (!Files.exists(FILE)) return;
@@ -388,6 +435,18 @@ public final class Cfg {
             // sizes the player chose manually.
             if (UI_WIDTH.v == 686 || UI_WIDTH.v == 510 || UI_WIDTH.v == 460) UI_WIDTH.set(330);
             if (UI_HEIGHT.v == 438 || UI_HEIGHT.v == 360 || UI_HEIGHT.v == 320) UI_HEIGHT.set(220);
+
+			int oldVersion = o.has("viewmodel_version") ? o.get("viewmodel_version").getAsInt() : 0;
+			if (oldVersion < VIEWMODEL_CONFIG_VERSION) {
+				// Old positions were applied to hand AND held item together and
+				// can place either model off-screen with the independent renderer.
+				// Migrate once, preserving all non-viewmodel settings.
+				resetViewmodelSettings(HAND_VIEW);
+				resetViewmodelSettings(ITEM_VIEW);
+				LOGGER.info("Migrated viewmodel settings v{} -> v{}; hand/item positions reset",
+						oldVersion, VIEWMODEL_CONFIG_VERSION);
+				save();
+			}
 		} catch (Exception error) {
             LOGGER.warn("Cannot read LT6 configuration {}. Defaults will be used.", FILE, error);
 		}
@@ -397,6 +456,7 @@ public final class Cfg {
 		try {
 			JsonObject o = new JsonObject();
 			o.addProperty("theme", theme);
+			o.addProperty("viewmodel_version", VIEWMODEL_CONFIG_VERSION);
 			JsonObject mods = new JsonObject();
 			for (Module m : ALL) {
 				JsonObject mo = new JsonObject();
