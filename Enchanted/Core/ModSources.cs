@@ -98,7 +98,10 @@ public sealed class ModManager
 
         // Clean up mods that this launcher previously installed but are no longer selected.
         // Never remove jars that are not recorded in the launcher manifest.
-        var selected = new HashSet<string>(Const.Mods(mc), StringComparer.OrdinalIgnoreCase);
+        var enabledMods = cfg.SelectedMods(mc);
+        var localMods = cfg.Extra(mc).Where(e => e.Enabled && e.Type == "local").ToList();
+        var selected = new HashSet<string>(enabledMods, StringComparer.OrdinalIgnoreCase);
+        foreach (var local in localMods) selected.Add("local:" + local.Id);
         foreach (var (key, filename) in man.ToArray())
         {
             if (key.StartsWith("dep:") || selected.Contains(key)) continue;
@@ -115,21 +118,26 @@ public sealed class ModManager
                 lostDependency = true;
             }
         SaveMan();
-        const int MaxMods = 24;
+        const int MaxMods = 128;
         int CountJars() => Directory.GetFiles(dir, "*.jar").Length;
         var completeFile = Path.Combine(dir, ".lt6ms-mods-ready.txt");
-        var expectedMods = string.Join("|", Const.Mods(mc));
+        var expectedMods = string.Join("|", enabledMods)
+            + "|local:" + string.Join("|", localMods.Select(e => e.Id + ":" + e.File));
 
         // Только после полного успешного прохода можно обходиться без сети.
         if (!cfg.VerifyFiles && !lostDependency && File.Exists(completeFile) &&
             File.ReadAllText(completeFile) == expectedMods &&
-            Const.Mods(mc).All(slug =>
+            enabledMods.All(slug =>
                 man.TryGetValue(slug, out var file) && File.Exists(Path.Combine(dir, Path.GetFileName(file)))) &&
+            localMods.All(e => man.TryGetValue("local:" + e.Id, out var n)
+                && File.Exists(Path.Combine(dir, Path.GetFileName(n)))) &&
             man.Where(kv => kv.Key.StartsWith("dep:")).All(kv =>
                 File.Exists(Path.Combine(dir, Path.GetFileName(kv.Value)))))
         {
-            foreach (var slug in Const.Mods(mc))
+            foreach (var slug in enabledMods)
                 row(new ModRow { Name = slug, State = "установлен", Dot = Green });
+            foreach (var local in localMods)
+                row(new ModRow { Name = local.Name, State = "локальный JAR", Dot = Green });
             status("Все моды на месте — запускаю без запросов к серверам...");
             return 0;
         }
@@ -137,7 +145,7 @@ public sealed class ModManager
         async Task<ModFile?> FindQuick(ModSource source, string id)
         {
             using var requestCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            requestCts.CancelAfter(TimeSpan.FromSeconds(3));
+            requestCts.CancelAfter(TimeSpan.FromSeconds(12));
             return await source.FindAsync(id, mc, requestCts.Token);
         }
 
@@ -159,7 +167,7 @@ public sealed class ModManager
             var path = Path.Combine(dir, f.Name);
             if (!File.Exists(path))
             {
-                if (CountJars() >= MaxMods) throw new InvalidOperationException("Лимит 24 модов: удалите лишние пользовательские моды или пересмотрите зависимости.");
+                if (CountJars() >= MaxMods) throw new InvalidOperationException("Лимит 128 модов: удалите лишние пользовательские моды или пересмотрите зависимости.");
                 await Download(f, path, ct);
             }
             if (man.TryGetValue(key, out var old) && old != f.Name) { try { File.Delete(Path.Combine(dir, old)); } catch { } }
@@ -169,7 +177,7 @@ public sealed class ModManager
             return true;
         }
 
-        foreach (var slug in Const.Mods(mc))
+        foreach (var slug in enabledMods)
         {
             ct.ThrowIfCancellationRequested();
             done.Add(slug);
@@ -193,6 +201,39 @@ public sealed class ModManager
                 row(new ModRow { Name = slug, State = "скачан (" + file.Source + ")", Dot = Blue });
             }
             else { missing++; row(new ModRow { Name = slug, State = "Modrinth недоступен", Dot = Red }); }
+        }
+
+        // Locally added JARs live in a dedicated staging folder. They can be
+        // disabled without touching the original user-supplied file.
+        foreach (var entry in localMods)
+        {
+            ct.ThrowIfCancellationRequested();
+            string key = "local:" + entry.Id;
+            try
+            {
+                if (entry.File != Path.GetFileName(entry.File) || !entry.File.EndsWith(".jar", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Некорректное имя локального мода");
+                var source = Path.Combine(Dirs.CustomMods(mc), entry.File);
+                if (!File.Exists(source)) throw new FileNotFoundException("Файл мода удалён", source);
+                var safeId = new string(entry.Id.Where(ch => char.IsLetterOrDigit(ch)).Take(32).ToArray());
+                if (safeId.Length == 0) throw new InvalidDataException("Некорректный ID локального мода");
+                var name = "lt6-local-" + safeId + ".jar";
+                var dest = Path.Combine(dir, name);
+                if (!File.Exists(dest) || new FileInfo(dest).Length != new FileInfo(source).Length
+                    || File.GetLastWriteTimeUtc(source) > File.GetLastWriteTimeUtc(dest))
+                    File.Copy(source, dest, true);
+                if (man.TryGetValue(key, out var oldName) && oldName != name)
+                    try { File.Delete(Path.Combine(dir, Path.GetFileName(oldName))); } catch { }
+                man[key] = name;
+                SaveMan();
+                row(new ModRow { Name = entry.Name, State = "локальный JAR", Dot = Green });
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                missing++;
+                row(new ModRow { Name = entry.Name, State = "ошибка JAR", Dot = Red });
+                Log.W($"local {entry.Id}: {e.Message}");
+            }
         }
 
         // обязательные зависимости
@@ -239,8 +280,7 @@ public sealed class ModManager
             || official.Scheme != Uri.UriSchemeHttps || official.Host != "cdn.modrinth.com")
             throw new InvalidDataException("Mod JAR downloads must use the official Modrinth CDN.");
         var urls = new[] { f.Url };
-        // Сначала один раз пробуем каждый адрес. При ошибке переключаемся
-        // на зеркало за 250 мс, а не трижды ждём один нерабочий сервер.
+        // Retry the official CDN only; mirrors are never consulted.
         for (int round = 0; round < 2; round++)
         {
             foreach (var url in urls)
