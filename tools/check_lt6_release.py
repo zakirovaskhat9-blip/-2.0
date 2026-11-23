@@ -81,6 +81,23 @@ for pack in packs:
         meta = json.loads(z.read('pack.mcmeta'))
         check(meta['pack']['min_format'] == 75 and meta['pack']['max_format'] == 75, f'Bad pack version: {pack.name}')
 
+# Avoid regression of the invisible resource-reload screen deadlock.
+loading = (JAVA/'mixin/LT6LoadingOverlayMixin.java').read_text(encoding='utf-8')
+check('this.fadeInStart = now' in loading, 'Silent reload must advance fadeInStart or mouse remains blocked')
+check('this.fadeOutStart' in loading and 'setOverlay(null)' in loading,
+      'Silent reload must eventually release the overlay')
+chat = (JAVA/'ChatHudEditor.java').read_text(encoding='utf-8')
+check('paintHandle' not in chat and 'draw' not in chat.split('public static void render(')[-1],
+      'No crosses or grip overlays in the chat editor')
+cape = (ROOT/'Enchanted/Core/CapeStudio.cs').read_text(encoding='utf-8')
+check('CanvasHeight = 1024' in cape and 'Resolution = 2048' in cape,
+      'Prepared cape must use high-resolution Minecraft 64x32 UV aspect')
+check('SourceFile(destination)' in cape and 'new CroppedBitmap' in cape,
+      'Preserve the original photo and preview the actual cape UV face')
+cape_runtime = (JAVA/'CapeTextures.java').read_text(encoding='utf-8')
+check('width != height * 2' in cape_runtime,
+      'Client cape texture dimensions must match 64x32 UV coordinates')
+
 java_text = '\n'.join(p.read_text(encoding='utf-8') for p in JAVA.rglob('*.java'))
 check('glBegin(' not in java_text and 'glEnd(' not in java_text, 'Legacy GL calls cannot run in Core Profile')
 check('SkyPano' not in java_text, 'Legacy sky renderer reference remains')

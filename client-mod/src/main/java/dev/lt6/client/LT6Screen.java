@@ -285,7 +285,7 @@ public final class LT6Screen extends Screen {
     }
 
     private int renderViewmodel(GuiGraphics g, int yy, boolean hands, Cfg.Module module) {
-        yy = note(g, yy, "В чате (T): тяни метки; колесо = размер");
+        yy = note(g, yy, "Чат (T): хватай предмет/руку, колесо = размер");
         Gfx.str(g, font, "ОСНОВНАЯ РУКА / ПРЕДМЕТ", contentX + 6, yy + 3, MUTED);
         yy += 22;
         Cfg.Slider[] main = hands
