@@ -43,7 +43,8 @@ public final class LT6Keys {
         boolean yPressed = yDown && !yHeld;
         yHeld = yDown;
         if (mc.player == null || mc.level == null || mc.screen != null) return;
-        if (pressed || yPressed || openRequested) {
+        // Y is the only keyboard shortcut, even if old options.txt remapped the bind.
+        if (yPressed || openRequested) {
             openRequested = false;
             try {
                 mc.setScreen(new LT6Screen());

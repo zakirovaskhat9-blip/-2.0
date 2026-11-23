@@ -95,24 +95,26 @@ check('section == 2 ? Cfg.FAST_XP' in screen
       and 'section == 2) yy = renderFastXP' in screen
       and 'area(sx, sy, sw, 51,' in screen,
       'Player tab and its clickable card must route to Fast XP, not Target ESP')
-check('Cfg.HAND_VIEW || dragOwner == Cfg.ITEM_VIEW' in screen
-      and 'dragOwner.enabled = true' in screen,
-      'Moving a viewmodel slider must enable the hand or item module')
+check('selected == 4) yy = renderItemSizes' in screen
+      and 'Cfg.ITEM_VIEW_SIZE' in screen and 'Cfg.ITEM_OFF_SIZE' in screen,
+      'Visuals II must offer only main/offhand item-size sliders')
+check('Cfg.HAND_VIEW' not in screen and 'Cfg.ITEM_VIEW_X' not in screen,
+      'No hand or item-position controls in the GUI')
 viewmodel = (JAVA/'mixin/FirstPersonViewMixin.java').read_text(encoding='utf-8')
-check('@Redirect(method = "renderHandsWithItems"' not in viewmodel
-      and '@Inject(method = "renderPlayerArm"' in viewmodel
-      and '@Inject(method = "renderItem"' in viewmodel,
-      'Hand and item drawing must use fully independent matrices')
-check('@Inject(method = "renderArmWithItem"' in viewmodel
-      and 'Cfg.SHOW_EMPTY_OFFHAND.v' in viewmodel,
-      'Offhand must be editable when the slot is empty')
-check('@Inject(method = "renderMapHand"' in viewmodel,
-      'Map hands must also honour hand-only transforms')
+check('@Inject(method = "renderPlayerArm"' in viewmodel
+      and '@Inject(method = "renderMapHand"' in viewmodel
+      and 'ci.cancel()' in viewmodel,
+      'Hide first-person arms when holding items or maps')
+check('pose.scale(scale, scale, scale)' in viewmodel
+      and 'pose.translate(' not in viewmodel
+      and 'Cfg.MAIN_HAND_SIZE' not in viewmodel,
+      'Viewmodel must change item size only and leave arms untouched')
 cfg = (JAVA/'Cfg.java').read_text(encoding='utf-8')
-check('viewmodel_version' in cfg and 'resetViewmodelSettings(HAND_VIEW)' in cfg,
-      'New viewmodel config must migrate old combined translations')
-check('Cfg.SHOW_EMPTY_OFFHAND' in screen and 'viewmodelReset(' in screen,
-      'GUI should expose empty offhand, per-hand resets and independent controls')
+check('ITEM_VIEW_SIZE, ITEM_OFF_SIZE);' in cfg
+      and 'GRADING,\\n\\t\\tITEM_VIEW' not in cfg,
+      'Config must expose item-size settings only')
+check('viewmodel_version' in cfg and 'ITEM_VIEW.enabled = true' in cfg,
+      'Item sizing must migrate enabled with previous scale values preserved')
 check('yPressed' in (JAVA/'LT6Keys.java').read_text(encoding='utf-8'),
       'Y must open LT6 even if old keybindings were remapped')
 chatmixin = (JAVA/'mixin/LT6ChatEditMixin.java').read_text(encoding='utf-8')
@@ -141,20 +143,12 @@ check((JAVA/'mixin/LT6SkySunMixin.java').is_file()
       and 'renderSun' in (JAVA/'mixin/LT6SkySunMixin.java').read_text(encoding='utf-8'),
       'Hide only the vanilla sun when Custom Sky is active')
 chat = (JAVA/'ChatHudEditor.java').read_text(encoding='utf-8')
-check('paintHandle' not in chat and 'Gfx.rr' in chat
-      and 'tab(t).contains(px, py)' in chat,
-      'Chat must expose exact grab buttons, never hidden crosses')
-check('ViewmodelHitboxes.get(main(t), item(t))' in chat
-      and (JAVA/'ViewmodelHitboxes.java').is_file(),
-      'Grab buttons and model hits must follow renderer-projected bounding boxes')
-check('ViewmodelHitboxes.capture(pose' in viewmodel
-      and 'lt6$isFirstPerson' in viewmodel,
-      'Hand and item hitbox capture must use their own rendering matrices')
-check('double sx = isItem ? .115 : .17' in chat
-      and 'owner(dragging)' in chat,
-      'Dragging a hand or item must update only its own configuration')
-check('Scale.v' not in chat or 'scaleSetting(target)' in chat,
-      'Mouse wheel resizing must remain enabled for hands and items')
+check('ViewmodelHitboxes.get(main, true)' in chat
+      and 'size.set(size.v + amount * .1)' in chat,
+      'Chat wheel may resize the held item without moving arms')
+check('MAIN_HAND_X' not in chat and 'OFF_HAND_X' not in chat
+      and 'paintHandle' not in chat and 'Gfx.rr' not in chat,
+      'Chat must not add hand positioning or grip overlays')
 cape = (ROOT/'Enchanted/Core/CapeStudio.cs').read_text(encoding='utf-8')
 check('CanvasHeight = 1024' in cape and 'Resolution = 2048' in cape,
       'Prepared cape must use high-resolution Minecraft 64x32 UV aspect')

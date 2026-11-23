@@ -24,8 +24,8 @@ public final class LT6Screen extends Screen {
     private static final int TEXT = 0xFFF2F7FF;
     private static final int MUTED = 0xFF9AACC3;
     private static final int ACCENT = 0xFF62BEFF;
-    private static final String[] LABELS = {"FPS", "Target ESP", "Custom Sky", "Color Grading", "Руки", "Предметы", "Jump FX", "Hit Color"};
-    private static final String[] SUBS = {"Размер и позиция", "Три прежних стиля", "Шесть наборов неба", "Цвет и яркость", "Обе руки отдельно", "Оба предмета отдельно", "Круги и искры", "Цвет при попадании"};
+    private static final String[] LABELS = {"FPS", "Target ESP", "Custom Sky", "Color Grading", "Предметы", "Jump FX", "Hit Color"};
+    private static final String[] SUBS = {"Размер и позиция", "Три прежних стиля", "Шесть наборов неба", "Цвет и яркость", "Только размер", "Круги и искры", "Цвет при попадании"};
 
     private record Hit(int x, int y, int w, int h, Runnable action) {
         boolean inside(double px, double py) {
@@ -54,7 +54,9 @@ public final class LT6Screen extends Screen {
 
     @Override
     protected void init() {
-        selected = Math.max(0, Math.min(7, selected));
+        selected = Math.max(0, Math.min(6, selected));
+        if (section == 0 && selected > 3) selected = 0;
+        if (section == 1 && selected < 4) selected = 4;
         section = Math.max(0, Math.min(3, section));
         Cfg.SKY_PRESET.opts = SkyLib.names();
         if (Cfg.SKY_PRESET.idx >= Cfg.SKY_PRESET.opts.length) Cfg.SKY_PRESET.idx = 0;
@@ -67,9 +69,8 @@ public final class LT6Screen extends Screen {
             case 1 -> Cfg.TARGET_ESP;
             case 2 -> Cfg.SKY;
             case 3 -> Cfg.GRADING;
-            case 4 -> Cfg.HAND_VIEW;
-            case 5 -> Cfg.ITEM_VIEW;
-            case 6 -> Cfg.JUMP_CIRCLES;
+            case 4 -> Cfg.ITEM_VIEW;
+            case 5 -> Cfg.JUMP_CIRCLES;
             default -> Cfg.HIT_COLOR;
         };
     }
@@ -160,8 +161,7 @@ public final class LT6Screen extends Screen {
             final int first = section == 0 ? 0 : 4;
             final Cfg.Module[] group = section == 0
                     ? new Cfg.Module[]{Cfg.FPS, Cfg.TARGET_ESP, Cfg.SKY, Cfg.GRADING}
-                    : new Cfg.Module[]{Cfg.HAND_VIEW, Cfg.ITEM_VIEW,
-                                       Cfg.JUMP_CIRCLES, Cfg.HIT_COLOR};
+                    : new Cfg.Module[]{Cfg.ITEM_VIEW, Cfg.JUMP_CIRCLES, Cfg.HIT_COLOR};
             for (int index = 0; index < group.length; index++) {
                 final int global = first + index;
                 Cfg.Module m = group[index];
@@ -255,8 +255,8 @@ public final class LT6Screen extends Screen {
         else if (selected == 1) yy = renderESP(g, mx, my, yy, m);
         else if (selected == 2) yy = renderSky(g, mx, my, yy, m);
         else if (selected == 3) yy = renderGrading(g, mx, my, yy, m);
-        else if (selected == 4 || selected == 5) yy = renderViewmodel(g, yy, selected == 4, m);
-        else if (selected == 6) yy = renderJumpFX(g, yy, m);
+        else if (selected == 4) yy = renderItemSizes(g, yy, m);
+        else if (selected == 5) yy = renderJumpFX(g, yy, m);
         else yy = renderHitColor(g, yy, m);
         contentHeight = Math.max(0, yy + (int)scroll - viewTop + 8);
         g.disableScissor();
@@ -386,42 +386,19 @@ public final class LT6Screen extends Screen {
         return yy;
     }
 
-    /** The arm controls never change an item transform (and vice versa). */
-    private int renderViewmodel(GuiGraphics g, int yy, boolean hands, Cfg.Module module) {
-        yy = note(g, yy, hands
-                ? "Пустая основная рука: держи слот пустым и меняй X/Y"
-                : "Предмет меняется отдельно; рука остаётся на месте");
-        if (hands) {
-            yy = checkbox(g, yy, Cfg.SHOW_EMPTY_OFFHAND, module);
-            yy = checkbox(g, yy, Cfg.SHOW_HAND_WITH_ITEM, module);
-            yy = note(g, yy, "Чат (T): тяни модель; колесо — размер; Ctrl — глубина");
-        }
-
-        Gfx.str(g, font, hands ? "ОСНОВНАЯ РУКА" : "ПРЕДМЕТ В ОСНОВНОЙ", contentX + 6, yy + 3, MUTED);
-        yy += 22;
-        Cfg.Slider[] main = hands
-                ? new Cfg.Slider[]{Cfg.MAIN_HAND_SIZE, Cfg.MAIN_HAND_X, Cfg.MAIN_HAND_Y, Cfg.MAIN_HAND_Z}
-                : new Cfg.Slider[]{Cfg.ITEM_VIEW_SIZE, Cfg.ITEM_VIEW_X, Cfg.ITEM_VIEW_Y, Cfg.ITEM_VIEW_Z};
-        for (Cfg.Slider setting : main) yy = slider(g, yy, setting, module);
-        yy = viewmodelReset(g, yy, hands, true);
-
-        Gfx.str(g, font, hands ? "ВТОРАЯ РУКА" : "ПРЕДМЕТ ВО ВТОРОЙ", contentX + 6, yy + 3, MUTED);
-        yy += 22;
-        Cfg.Slider[] off = hands
-                ? new Cfg.Slider[]{Cfg.OFF_HAND_SIZE, Cfg.OFF_HAND_X, Cfg.OFF_HAND_Y, Cfg.OFF_HAND_Z}
-                : new Cfg.Slider[]{Cfg.ITEM_OFF_SIZE, Cfg.ITEM_OFF_X, Cfg.ITEM_OFF_Y, Cfg.ITEM_OFF_Z};
-        for (Cfg.Slider setting : off) yy = slider(g, yy, setting, module);
-        yy = viewmodelReset(g, yy, hands, false);
-        return yy;
-    }
-
-    private int viewmodelReset(GuiGraphics g, int yy, boolean hands, boolean main) {
-        String label = main ? "Сбросить основную" : "Сбросить вторую";
+    /** No arm controls or positional offsets — only item size for each slot. */
+    private int renderItemSizes(GuiGraphics g, int yy, Cfg.Module module) {
+        yy = note(g, yy, "Рука с предметом скрывается автоматически");
+        yy = note(g, yy, "Положение пустой руки не меняется");
+        yy = slider(g, yy, Cfg.ITEM_VIEW_SIZE, module);
+        yy = slider(g, yy, Cfg.ITEM_OFF_SIZE, module);
         Gfx.rr(g, contentX, yy, contentW, 28, 6, CARD);
-        Gfx.strC(g, font, label, contentX + contentW / 2, yy + 9, ACCENT);
+        Gfx.strC(g, font, "Сбросить размеры", contentX + contentW / 2, yy + 9, ACCENT);
         area(contentX, yy, contentW, 28, () -> {
-            if (hands) Cfg.resetViewmodelHand(main);
-            else Cfg.resetViewmodelItem(main);
+            Cfg.ITEM_VIEW_SIZE.reset();
+            Cfg.ITEM_OFF_SIZE.reset();
+            module.enabled = true;
+            Cfg.changed(module);
         });
         return yy + 36;
     }
@@ -510,7 +487,7 @@ public final class LT6Screen extends Screen {
         Gfx.toggle(g, sx, yy + 13, setting.v ? 1f : 0f, ACCENT);
         area(contentX, yy, contentW, 38, () -> {
             setting.v = !setting.v;
-            if (m == Cfg.HAND_VIEW || m == Cfg.ITEM_VIEW) m.enabled = true;
+            if (m == Cfg.ITEM_VIEW) m.enabled = true;
             Cfg.changed(m);
         });
         return yy + 46;
@@ -566,10 +543,9 @@ public final class LT6Screen extends Screen {
         if (dragging == null || dragOwner == null || dragW < 1) return;
         double fraction = Math.max(0d, Math.min(1d, (mouseX - dragX) / dragW));
         dragging.set(dragging.min + fraction * (dragging.max - dragging.min));
-        // Viewmodel sliders used to update saved numbers while their
-        // modules stayed disabled, so hands appeared completely broken.
-        if (dragOwner == Cfg.HAND_VIEW || dragOwner == Cfg.ITEM_VIEW
-                || dragOwner == Cfg.FAST_XP) dragOwner.enabled = true;
+        // Item size changes are live even when the module was previously disabled.
+        if (dragOwner == Cfg.ITEM_VIEW || dragOwner == Cfg.FAST_XP)
+            dragOwner.enabled = true;
         if (dragOwner == Cfg.GRADING) {
             Cfg.GRADING_PRESET.idx = Cfg.GRADING_PRESET.opts.length - 1; // Custom
             Cfg.GRADING.enabled = true;

@@ -188,22 +188,23 @@ public final class Cfg {
 	public static final Bool SHOW_HAND_WITH_ITEM = new Bool("hand_with_item",
 		"Показывать руку рядом с предметом", true);
 	public static final Module HAND_VIEW = new Module("hand_view", "Viewmodel Hands",
-		"Только модель руки: независимо от предметов", VIS, true,
+		"Устаревшие настройки рук — больше не применяются", VIS, false,
 		MAIN_HAND_SIZE, MAIN_HAND_X, MAIN_HAND_Y, MAIN_HAND_Z,
 		OFF_HAND_SIZE, OFF_HAND_X, OFF_HAND_Y, OFF_HAND_Z,
 		SHOW_EMPTY_OFFHAND, SHOW_HAND_WITH_ITEM);
 
 	// Дополнительные преобразования только модели предмета, независимо от общей руки.
-	public static final Slider ITEM_VIEW_SIZE = new Slider("item_scale", "Размер предмета", 0.3, 2.5, 0.05, 1.0, "x");
+	public static final Slider ITEM_VIEW_SIZE = new Slider("item_scale", "Размер основного предмета", 0.3, 2.5, 0.05, 1.0, "x");
 	public static final Slider ITEM_VIEW_X = new Slider("item_x", "Предмет: X", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_VIEW_Y = new Slider("item_y", "Предмет: Y", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_VIEW_Z = new Slider("item_z", "Предмет: Z", -1.5, 1.5, 0.05, 0, "");
-	public static final Slider ITEM_OFF_SIZE = new Slider("off_item_scale", "Предмет слева: размер", 0.3, 2.5, 0.05, 1, "x");
+	public static final Slider ITEM_OFF_SIZE = new Slider("off_item_scale", "Размер второго предмета", 0.3, 2.5, 0.05, 1, "x");
 	public static final Slider ITEM_OFF_X = new Slider("off_item_x", "Предмет слева: X", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_OFF_Y = new Slider("off_item_y", "Предмет слева: Y", -1.5, 1.5, 0.05, 0, "");
 	public static final Slider ITEM_OFF_Z = new Slider("off_item_z", "Предмет слева: Z", -1.5, 1.5, 0.05, 0, "");
-	public static final Module ITEM_VIEW = new Module("item_view", "Viewmodel Items", "Только предметы: не сдвигает модели рук", VIS, true,
-		ITEM_VIEW_SIZE, ITEM_VIEW_X, ITEM_VIEW_Y, ITEM_VIEW_Z, ITEM_OFF_SIZE, ITEM_OFF_X, ITEM_OFF_Y, ITEM_OFF_Z);
+	public static final Module ITEM_VIEW = new Module("item_view", "Размер предметов",
+		"Только масштаб предметов, без изменений рук или позиции", VIS, true,
+		ITEM_VIEW_SIZE, ITEM_OFF_SIZE);
 
 	public static final Color HIT_TINT = new Color("color", "Цвет попадания", 1);
 	public static final Slider HIT_SIZE = new Slider("size", "Размер частиц", 0.5, 2.5, 0.1, 1.0, "x");
@@ -298,7 +299,7 @@ public final class Cfg {
     public static final Slider FAST_XP_TICKS = new Slider("cooldown", "Задержка Fast XP", 1, 4, 1, 1, "тик");
 	public static final Module FAST_XP = new Module("fast_xp", "Fast XP",
 		"Быстрее бросать пузырьки опыта при удержании ПКМ", PLAYER, false, FAST_XP_TICKS);
-	static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY, GRADING, HAND_VIEW,
+	static final List<Module> ALL = List.of(FPS, TARGET_ESP, SKY, GRADING,
 		ITEM_VIEW, JUMP_CIRCLES, HIT_COLOR, FAST_XP);
 
 	static Options opts() { return Minecraft.getInstance().options; }
@@ -372,7 +373,7 @@ public final class Cfg {
 
 	// New renderer is not a child transform of the held item. One-time
 	// migration resets only old viewmodel translations, never other modules.
-	private static final int VIEWMODEL_CONFIG_VERSION = 4;
+	private static final int VIEWMODEL_CONFIG_VERSION = 5;
 
 	static void resetViewmodelSettings(Module module) {
 		for (Setting setting : module.settings) setting.reset();
@@ -396,19 +397,9 @@ public final class Cfg {
 	}
 
 	static void resetViewmodelItem(boolean main) {
-		if (main) {
-			ITEM_VIEW_SIZE.reset();
-			ITEM_VIEW_X.reset();
-			ITEM_VIEW_Y.reset();
-			ITEM_VIEW_Z.reset();
-		} else {
-			ITEM_OFF_SIZE.reset();
-			ITEM_OFF_X.reset();
-			ITEM_OFF_Y.reset();
-			ITEM_OFF_Z.reset();
-		}
+		if (main) ITEM_VIEW_SIZE.reset();
+		else ITEM_OFF_SIZE.reset();
 		ITEM_VIEW.enabled = true;
-		ChatHudEditor.clearAnchors();
 		changed(ITEM_VIEW);
 	}
 
@@ -446,16 +437,11 @@ public final class Cfg {
 
 			int oldVersion = o.has("viewmodel_version") ? o.get("viewmodel_version").getAsInt() : 0;
 			if (oldVersion < VIEWMODEL_CONFIG_VERSION) {
-				// Old positions were applied to hand AND held item together and
-				// can place either model off-screen with the independent renderer.
-				// Migrate once, preserving all non-viewmodel settings.
-				resetViewmodelSettings(HAND_VIEW);
-				resetViewmodelSettings(ITEM_VIEW);
-                HAND_VIEW.enabled = true;
-                ITEM_VIEW.enabled = true;
-				ChatHudEditor.clearAnchors();
-				LOGGER.info("Migrated viewmodel settings v{} -> v{}; hand/item positions reset",
-						oldVersion, VIEWMODEL_CONFIG_VERSION);
+				// Legacy arm positions and item offsets are no longer used.
+				// Preserve any chosen item scale; only enable the item-size module.
+				HAND_VIEW.enabled = false;
+				ITEM_VIEW.enabled = true;
+				LOGGER.info("Migrated viewmodel to item-size-only v{}", VIEWMODEL_CONFIG_VERSION);
 				save();
 			}
 		} catch (Exception error) {
