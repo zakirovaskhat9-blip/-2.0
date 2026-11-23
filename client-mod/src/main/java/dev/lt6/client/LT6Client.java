@@ -26,6 +26,7 @@ public final class LT6Client implements ClientModInitializer {
             LT6Keys.poll(mc);
             // ColorFX also resets gamma/post-effects when leaving a world.
             ColorFX.tick(mc);
+            CapeTextures.tick(mc);
             if (mc.player == null || mc.level == null) return;
             Binds.poll(mc);
             SkyOptions.tick(mc);

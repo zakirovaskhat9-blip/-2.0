@@ -11,7 +11,8 @@
     "LT6PostChainAccess",
     "LT6PostPassAccess",
     "LT6LoadingOverlayMixin",
-    "LT6ChatEditMixin"
+    "LT6ChatEditMixin",
+    "LT6LocalCapeMixin"
   ],
   "injectors": {
     "defaultRequire": 0
