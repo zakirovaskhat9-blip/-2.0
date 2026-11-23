@@ -32,6 +32,12 @@ final class TargetEspSprite {
     private static final Identifier DIAMOND_CORE =
             Identifier.fromNamespaceAndPath("lt6", "generated/target_esp_nursultan_symmetric");
     private static boolean diamondReady;
+    private static final Identifier PAINTED_STANDARD =
+            Identifier.fromNamespaceAndPath("lt6", "generated/target_esp_painted_standard");
+    private static final Identifier PAINTED_DIAMOND =
+            Identifier.fromNamespaceAndPath("lt6", "generated/target_esp_painted_nursultan");
+    private static long paintKey = Long.MIN_VALUE;
+    private static boolean paintReady;
 
     // Standard style: two strokes per chevron, top/right/bottom/left.
     private static final double[][] SEGMENTS = {
@@ -46,38 +52,83 @@ final class TargetEspSprite {
 
     private TargetEspSprite() { }
 
-    static void render(GuiGraphics graphics, int argb, float opacity, double bloomPercent, int style) {
-        float glow = (float) Math.max(0.0, Math.min(2.0, bloomPercent / 100.0));
+    static void render(GuiGraphics graphics, int primary, int secondary, float opacity,
+                       double bloomPercent, int style, int paintMode) {
+        float glow = (float)Math.max(0.0, Math.min(2.0, bloomPercent / 100.0));
+        if (!initialized && !failed) initialize();
+
+        Identifier painted = null;
+        if (paintMode != 0 && initialized) {
+            painted = paintedTexture(style, primary, secondary, paintMode);
+        }
+        boolean dual = painted != null;
+        int color = dual ? 0xFFFFFFFF : primary;
+
         if (style == 1) {
-            if (!initialized && !failed) initialize();
-            Identifier actualDiamond = diamondReady ? DIAMOND_CORE : DIAMOND_ORIGINAL;
-            // At 0% glow only the exact symmetric silhouette is displayed.
-            // Optional halo uses only scaled copies of this same image, never a
-            // different generated shape. The core stays sharp at any setting.
+            Identifier texture = dual ? painted : diamondReady ? DIAMOND_CORE : DIAMOND_ORIGINAL;
             if (glow > 0.01f) {
-                draw(graphics, actualDiamond,
-                        Gfx.a(argb, Math.min(1f, opacity * glow * 0.16f)),
+                draw(graphics, texture, Gfx.a(color, Math.min(1f, opacity * glow * 0.16f)),
                         DRAW_SIZE + 14, DIAMOND_TEXTURE_SIZE);
-                draw(graphics, actualDiamond,
-                        Gfx.a(argb, Math.min(1f, opacity * glow * 0.25f)),
+                draw(graphics, texture, Gfx.a(color, Math.min(1f, opacity * glow * 0.25f)),
                         DRAW_SIZE + 7, DIAMOND_TEXTURE_SIZE);
             }
-            draw(graphics, actualDiamond, Gfx.a(argb, opacity), DRAW_SIZE, DIAMOND_TEXTURE_SIZE);
+            draw(graphics, texture, Gfx.a(color, opacity), DRAW_SIZE, DIAMOND_TEXTURE_SIZE);
             return;
         }
 
-        if (!initialized && !failed) initialize();
         if (!initialized) return;
         if (glow > 0.01f) {
-            draw(graphics, BLOOM_ID, Gfx.a(argb, Math.min(1f, opacity * glow)),
+            draw(graphics, BLOOM_ID, Gfx.a(primary, Math.min(1f, opacity * glow)),
                     DRAW_SIZE, TEXTURE_SIZE);
-            if (glow > 1.10f) {
+            if (glow > 1.10f)
                 draw(graphics, BLOOM_ID,
-                        Gfx.a(argb, Math.min(1f, opacity * (glow - 1.0f) * 0.6f)),
+                        Gfx.a(primary, Math.min(1f, opacity * (glow - 1f) * .6f)),
                         DRAW_SIZE, TEXTURE_SIZE);
-            }
         }
-        draw(graphics, CORE_ID, Gfx.a(argb, opacity), DRAW_SIZE, TEXTURE_SIZE);
+        draw(graphics, dual ? painted : CORE_ID, Gfx.a(color, opacity),
+                DRAW_SIZE, TEXTURE_SIZE);
+    }
+
+    /**
+     * Rasterize the approved alpha mask; only its fill colour changes.
+     * Cache the uploaded GPU texture. Animated shimmer updates at most 4 Hz.
+     */
+    private static Identifier paintedTexture(int style, int primary, int secondary, int mode) {
+        long phase = mode == 4 ? System.currentTimeMillis() / 250L : 0L;
+        long key = ((long)style << 61) ^ ((long)mode << 56)
+                ^ ((long)(primary & 0xFFFFFF) << 24) ^ (secondary & 0xFFFFFF)
+                ^ (phase * 0x9E3779B97F4A7C15L);
+        Identifier texture = style == 1 ? PAINTED_DIAMOND : PAINTED_STANDARD;
+        if (paintReady && key == paintKey) return texture;
+        try (NativeImage mask = style == 1 ? symmetricDiamond() : makeImage(false)) {
+            int w = mask.getWidth(), h = mask.getHeight();
+            NativeImage image = new NativeImage(w, h, true);
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int alpha = (mask.getPixel(x, y) >>> 24) & 255;
+                    int rgb;
+                    switch (mode) {
+                        case 1 -> rgb = x < w / 2 ? primary : secondary;
+                        case 2 -> rgb = ((x < w / 2) == (y < h / 2)) ? primary : secondary;
+                        case 3 -> rgb = Gfx.mix(primary, secondary, x / (float)Math.max(1, w - 1));
+                        case 4 -> {
+                            double theta = ((x + y) / (double)w) * 5.0 - phase * .38;
+                            rgb = Gfx.mix(primary, secondary, (float)(.5 + .5 * Math.sin(theta)));
+                        }
+                        default -> rgb = primary;
+                    }
+                    image.setPixelABGR(x, y, (alpha << 24) | (rgb & 0xFFFFFF));
+                }
+            }
+            register(texture, image, "LT6 dual-colour target ESP");
+            paintKey = key;
+            paintReady = true;
+            return texture;
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("Cannot update dual-colour Target ESP; falling back to the original", e);
+            paintReady = false;
+            return null;
+        }
     }
 
     private static void draw(GuiGraphics graphics, Identifier image, int color, int drawSize, int textureSize) {
