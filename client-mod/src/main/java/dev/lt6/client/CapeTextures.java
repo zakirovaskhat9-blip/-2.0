@@ -50,9 +50,9 @@ public final class CapeTextures {
             try (var input = Files.newInputStream(file)) {
                 NativeImage image = NativeImage.read(input);
                 int width = image.getWidth(), height = image.getHeight();
-                if (width != height || width < 64 || width > 4096 || width % 64 != 0) {
+                if (width != height * 2 || width < 64 || width > 4096 || width % 64 != 0) {
                     image.close();
-                    LOGGER.warn("Custom cape must be a square 64x64 UV atlas, got {}x{}: {}",
+                    LOGGER.warn("Custom cape must have 64x32 UV aspect (e.g. 2048x1024), got {}x{}: {}",
                             width, height, file);
                     ready = false;
                     return;

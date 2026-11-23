@@ -294,7 +294,7 @@ public partial class MainWindow : Window
             CapeStudio.MigrateLegacy(file);
             CapePreview.Source = CapeStudio.Preview(file);
             CapeEmptyText.Visibility = Visibility.Collapsed;
-            CapeStatusText.Text = "Плащ готов: 2048×2048, правильные UV. Исходный PNG сохранён отдельно.";
+            CapeStatusText.Text = "Плащ готов: 2048×1024, правильные UV. Исходный PNG сохранён отдельно.";
         }
         catch (Exception ex)
         {

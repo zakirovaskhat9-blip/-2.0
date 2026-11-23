@@ -6,13 +6,14 @@ namespace Enchanted;
 
 /// <summary>
 /// High-resolution Minecraft cape UV atlas. Minecraft 1.21.11's cape model
-/// uses a 64x64 UV grid, so the prepared texture must be square (NOT 64x32).
-/// 2048x2048 gives each 10x16 cape face a 320x512 pixel canvas.
+/// uses a 64x32 UV grid (the baked model halves the vertical UV scale).
+/// 2048x1024 gives each 10x16 cape face a 320x512 pixel canvas.
 /// The original PNG is saved separately and never modified.
 </summary>
 public static class CapeStudio
 {
     public const int Resolution = 2048;
+    public const int CanvasHeight = 1024;
     private const int Unit = Resolution / 64;
 
     public static string SourceFile(string destination) =>
@@ -46,12 +47,14 @@ public static class CapeStudio
         {
             if (isTemplate)
             {
-                // Official cape UV: top 32 rows of a 64x64 atlas contain
-                // all six faces. Preserve layout, no cropping or remapping.
-                var rect = frame.PixelWidth == frame.PixelHeight
-                    ? new Rect(0, 0, Resolution, Resolution)
-                    : new Rect(0, 0, Resolution, Resolution / 2);
-                dc.DrawImage(frame, rect);
+                // ModelPart bake: UV width=64, height=32. A 64x64 template
+                // contains optional unused lower rows. Keep only its top half
+                // rather than squeezing the artwork vertically.
+                BitmapSource top = frame;
+                if (frame.PixelWidth == frame.PixelHeight)
+                    top = new CroppedBitmap(frame,
+                        new Int32Rect(0, 0, frame.PixelWidth, frame.PixelHeight / 2));
+                dc.DrawImage(top, new Rect(0, 0, Resolution, CanvasHeight));
             }
             else
             {
@@ -72,7 +75,7 @@ public static class CapeStudio
                 dc.DrawRectangle(edge, null, new Rect(11 * Unit, 17 * Unit, 10 * Unit, Unit));
             }
         }
-        var atlas = new RenderTargetBitmap(Resolution, Resolution, 96, 96, PixelFormats.Pbgra32);
+        var atlas = new RenderTargetBitmap(Resolution, CanvasHeight, 96, 96, PixelFormats.Pbgra32);
         atlas.Render(visual);
         var png = new PngBitmapEncoder();
         png.Frames.Add(BitmapFrame.Create(atlas));
@@ -108,7 +111,7 @@ public static class CapeStudio
         BitmapSource frame = png.Frames[0];
         // Show the actual OUTSIDE of the cape, not the whole atlas, so the
         // user knows exactly how their uploaded picture looks on the model.
-        if (frame.PixelWidth == frame.PixelHeight && frame.PixelWidth >= 64)
+        if (frame.PixelWidth == frame.PixelHeight * 2 && frame.PixelWidth >= 64)
         {
             int unit = frame.PixelWidth / 64;
             if (unit > 0)
