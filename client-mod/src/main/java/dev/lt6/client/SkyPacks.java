@@ -51,7 +51,8 @@ public final class SkyPacks {
             mc.options.updateResourcePacks(repo);
             silentUntil = System.currentTimeMillis() + 90_000L;
             mc.reloadResourcePacks().whenComplete((v, error) -> {
-                silentUntil = System.currentTimeMillis() + 2500L;
+                // The overlay owns its own teardown. Do not allow a secondary
+                // selection to inherit the previous callback's short timeout.
                 if (error != null) LOGGER.error("LT6 sky pack reload failed", error);
                 else LOGGER.info("LT6 sky resource pack: {}", enabled ? FILES[Math.floorMod(index, FILES.length)] : "disabled");
             });
