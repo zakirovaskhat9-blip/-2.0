@@ -147,10 +147,12 @@ public final class ChatHudEditor {
         double tw = mc().font.width(name(t)) + 14;
         double th = 17;
         double cx = model.cx();
-        double y = item(t) ? model.y - 5 : model.y + model.height - 12;
+        double y = item(t) ? model.y() - 5 : model.y() + model.height() - 12;
         double x = Math.max(4, Math.min(width()-tw-4, cx-tw*.5));
         y = Math.max(34, Math.min(height()-44, y));
-        return new ViewmodelHitboxes.Rect(x, y, tw, th);
+        // Pixel snapping makes the drawn tab and clickable tab EXACTLY equal.
+        return new ViewmodelHitboxes.Rect(Math.round(x), Math.round(y),
+                Math.ceil(tw), Math.ceil(th));
     }
 
     private static Target hit(double px, double py) {
