@@ -29,6 +29,8 @@ public final class LT6Client implements ClientModInitializer {
             CapeTextures.tick(mc);
             if (mc.player == null || mc.level == null) return;
             Binds.poll(mc);
+            JumpFX.tick(mc);
+            FastXP.tick(mc);
             SkyOptions.tick(mc);
             SkyPacks.tick(mc);
         });

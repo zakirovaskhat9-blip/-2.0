@@ -12,7 +12,8 @@
     "LT6PostPassAccess",
     "LT6LoadingOverlayMixin",
     "LT6ChatEditMixin",
-    "LT6LocalCapeMixin"
+    "LT6LocalCapeMixin",
+    "LT6SkySunMixin"
   ],
   "injectors": {
     "defaultRequire": 0
