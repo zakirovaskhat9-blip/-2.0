@@ -13,7 +13,8 @@ import org.lwjgl.glfw.GLFW;
 
 /**
  * LT6: a lightweight, responsive, dark Lunar-inspired menu.
- * FPS, three Target ESP styles, Custom Sky and live GPU Color Grading.
+ * The Visuals category contains FPS, Target ESP, Custom Sky, Color Grading
+ * and both viewmodel modules. The Player category is independently navigable.
  * One click opens settings, a separate toggle turns each module on/off.
  */
 public final class LT6Screen extends Screen {
@@ -34,6 +35,7 @@ public final class LT6Screen extends Screen {
 
     private final List<Hit> hits = new ArrayList<>();
     private static int selected = 0;
+    private static int section = 0; // 0 Visuals, 1 Player
     private int x, y, w, h, sideW, contentX, contentW, viewTop, viewBottom, contentHeight;
     private double scroll;
     private Cfg.Slider dragging;
@@ -51,6 +53,7 @@ public final class LT6Screen extends Screen {
     @Override
     protected void init() {
         selected = Math.max(0, Math.min(5, selected));
+        section = Math.max(0, Math.min(1, section));
         Cfg.SKY_PRESET.opts = SkyLib.names();
         if (Cfg.SKY_PRESET.idx >= Cfg.SKY_PRESET.opts.length) Cfg.SKY_PRESET.idx = 0;
         scroll = 0;
@@ -107,32 +110,76 @@ public final class LT6Screen extends Screen {
         Gfx.ring(g, x, y, w, h, 11, 1, 0x345B7DA2);
         Gfx.rr(g, x + 12, y + 17, 3, 24, 1, ACCENT);
         Gfx.str(g, font, "LT6", x + 25, y + 20, TEXT);
-        Gfx.str(g, font, "LUNAR-STYLE VISUALS", x + 25, y + 34, MUTED);
-        Gfx.str(g, font, "МОДУЛИ", x + 17, y + 76, MUTED);
-
-        Cfg.Module[] modules = {Cfg.FPS, Cfg.TARGET_ESP, Cfg.SKY, Cfg.GRADING, Cfg.HAND_VIEW, Cfg.ITEM_VIEW};
-        for (int i = 0; i < modules.length; i++) {
-            final int id = i;
-            Cfg.Module m = modules[i];
-            int itemSpacing = Math.max(19, Math.min(52, (h - 128) / modules.length));
-            int sy = y + 91 + i * itemSpacing, sx = x + 10, sw = sideW - 18;
-            int itemHeight = Math.max(15, itemSpacing - 4);
-            boolean active = selected == i;
-            int fill = active ? 0xFF273F58 : hover(mx, my, sx, sy, sw, itemHeight) ? 0xFF1A2C3F : 0xFF142132;
-            Gfx.rr(g, sx, sy, sw, itemHeight, 7, fill);
-            if (active) Gfx.rr(g, sx, sy + 3, 3, itemHeight - 6, 1, ACCENT);
-            Gfx.str(g, font, LABELS[i], sx + 11, sy + (itemHeight < 30 ? 4 : 10), active ? TEXT : 0xFFD5E3F5);
-            if (itemHeight >= 44) Gfx.str(g, font, Gfx.trim(font, SUBS[i], sw - 24), sx + 11, sy + 28, MUTED);
-            area(sx, sy, sw, itemHeight, () -> {
-                selected = id;
+        Gfx.str(g, font, "VISUALS / PLAYER", x + 25, y + 34, MUTED);
+        // Two main categories. Previously all existing features were mixed
+        // into a flat list, leaving no place for gameplay/player modules.
+        int tabW = (sideW - 25) / 2, tabY = y + 60;
+        for (int i = 0; i < 2; i++) {
+            final int next = i;
+            int tx = x + 10 + i * (tabW + 5);
+            Gfx.rr(g, tx, tabY, tabW, 29, 6,
+                    section == i ? 0xFF315579 : 0xFF1A2B3C);
+            Gfx.strC(g, font, i == 0 ? "Visuals" : "Player",
+                    tx + tabW / 2, tabY + 10, section == i ? TEXT : MUTED);
+            area(tx, tabY, tabW, 29, () -> {
+                section = next;
                 scroll = 0;
                 dragging = null;
             });
-            Gfx.rr(g, sx + sw - 14, sy + 11, 5, 5, 2,
-                    m.enabled ? 0xFF70E1AD : 0xFF6C7888);
+        }
+
+        if (section == 0) {
+            Cfg.Module[] modules = {
+                    Cfg.FPS, Cfg.TARGET_ESP, Cfg.SKY, Cfg.GRADING,
+                    Cfg.HAND_VIEW, Cfg.ITEM_VIEW
+            };
+            for (int i = 0; i < modules.length; i++) {
+                final int id = i;
+                Cfg.Module m = modules[i];
+                int itemSpacing = Math.max(19, Math.min(52, (h - 155) / modules.length));
+                int sy = y + 105 + i * itemSpacing, sx = x + 10, sw = sideW - 18;
+                int itemHeight = Math.max(15, itemSpacing - 4);
+                boolean active = selected == i;
+                int fill = active ? 0xFF273F58
+                        : hover(mx, my, sx, sy, sw, itemHeight) ? 0xFF1A2C3F
+                        : 0xFF142132;
+                Gfx.rr(g, sx, sy, sw, itemHeight, 7, fill);
+                if (active) Gfx.rr(g, sx, sy + 3, 3, itemHeight - 6, 1, ACCENT);
+                Gfx.str(g, font, Gfx.trim(font, LABELS[i], sw - 26),
+                        sx + 11, sy + (itemHeight < 30 ? 4 : 10),
+                        active ? TEXT : 0xFFD5E3F5);
+                if (itemHeight >= 44)
+                    Gfx.str(g, font, Gfx.trim(font, SUBS[i], sw - 24),
+                            sx + 11, sy + 28, MUTED);
+                area(sx, sy, sw, itemHeight, () -> {
+                    selected = id;
+                    scroll = 0;
+                    dragging = null;
+                });
+                Gfx.rr(g, sx + sw - 13, sy + 8, 5, 5, 2,
+                        m.enabled ? 0xFF70E1AD : 0xFF6C7888);
+            }
+        } else {
+            Gfx.str(g, font, "ФУНКЦИИ ИГРОКА", x + 14, y + 114, MUTED);
+            Gfx.rr(g, x + 10, y + 139, sideW - 18, 47, 7, 0xFF1C3044);
+            Gfx.str(g, font, "FastAPI", x + 20, y + 151, TEXT);
+            Gfx.str(g, font, "Требуется уточнение", x + 20, y + 168, MUTED);
         }
 
         Gfx.str(g, font, "Y / ESC  |  ДВИГАЙ ЗАГОЛОВОК", x + 12, y + h - 22, 0xFF7F92A9);
+
+        if (section == 1) {
+            Gfx.str(g, font, "PLAYER", contentX, y + 24, TEXT);
+            Gfx.str(g, font, "Настройки поведения игрока", contentX, y + 41, MUTED);
+            Gfx.rr(g, contentX, y + 68, contentW, 106, 8, CARD);
+            Gfx.str(g, font, "FastAPI", contentX + 15, y + 84, TEXT);
+            Gfx.str(g, font, "Пока не активирован", contentX + 15, y + 105, ACCENT);
+            Gfx.str(g, font, Gfx.trim(font,
+                    "Нужно уточнить, какое действие он должен ускорять.",
+                    contentW - 25), contentX + 15, y + 126, MUTED);
+            Gfx.str(g, font, "Y / ESC  |  Автосохранение", contentX, y + h - 21, MUTED);
+            return;
+        }
 
         Cfg.Module m = module();
         Gfx.str(g, font, LABELS[selected], contentX, y + 23, TEXT);
