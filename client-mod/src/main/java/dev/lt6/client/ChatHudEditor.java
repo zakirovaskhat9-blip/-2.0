@@ -18,6 +18,12 @@ public final class ChatHudEditor {
 
     private static Target dragging = Target.NONE;
     private static double startMouseX, startMouseY, startX, startY;
+    // Preserve each dragged object's last screen-space location across chat
+    // re-openings. The original mesh bounds are approximate; without these
+    // anchors the user cannot grab an item again after moving it far away.
+    private static final double[] lastX = new double[Target.values().length];
+    private static final double[] lastY = new double[Target.values().length];
+    private static final boolean[] hasLast = new boolean[Target.values().length];
     private ChatHudEditor() {}
 
     public static void register() {
@@ -93,56 +99,80 @@ public final class ChatHudEditor {
     /**
      * First-person render meshes are submitted in 3D, not exposed as GUI
      * widgets. Approximate their clickable silhouette from screen anchors,
-     * active scales and user transforms; only claim hits on occupied regions.
-     * Shift prioritizes dragging the hand under a held item.
+     * active scales and user transforms, plus exact cursor anchors saved after
+     * each successful drag. Shift prioritizes the hand under a held item.
      */
     private static Target hit(double x, double y) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.screen == null || !(mc.screen instanceof ChatScreen))
-            return Target.NONE;
+        if (mc.player == null || !(mc.screen instanceof ChatScreen)) return Target.NONE;
         int w = width(), h = height();
 
         if (Cfg.FPS.enabled) {
             int fx = Overlay.left(w, mc.font), fy = Overlay.top(h);
             if (x >= fx - 3 && x <= fx + Overlay.panelWidth(mc.font) * Overlay.scale() + 3
-                    && y >= fy - 3 && y <= fy + 25 * Overlay.scale() + 3)
-                return Target.FPS;
+                    && y >= fy - 3 && y <= fy + 25 * Overlay.scale() + 3) return Target.FPS;
         }
 
-        // The bottom strip is the vanilla chat input; never intercept typing,
-        // cursor placement, messages or links there.
-        if (y >= h - 24 || y < h * 0.31) return Target.NONE;
+        // The chat entry box and its cursor must always remain interactive.
+        if (y >= h - 24) return Target.NONE;
 
         boolean preferArm = mc.hasShiftDown();
-        for (int side = 0; side < 2; side++) {
-            boolean main = side == 0;
-            boolean hasItem = !(main ? mc.player.getMainHandItem() : mc.player.getOffhandItem()).isEmpty();
-            double sign = main ? 1.0 : -1.0;
-            Cfg.Slider armX = main ? Cfg.MAIN_HAND_X : Cfg.OFF_HAND_X;
-            Cfg.Slider armY = main ? Cfg.MAIN_HAND_Y : Cfg.OFF_HAND_Y;
-            Cfg.Slider armScale = main ? Cfg.MAIN_HAND_SIZE : Cfg.OFF_HAND_SIZE;
-            Cfg.Slider itemX = main ? Cfg.ITEM_VIEW_X : Cfg.ITEM_OFF_X;
-            Cfg.Slider itemY = main ? Cfg.ITEM_VIEW_Y : Cfg.ITEM_OFF_Y;
-            Cfg.Slider itemScale = main ? Cfg.ITEM_VIEW_SIZE : Cfg.ITEM_OFF_SIZE;
+        Target best = Target.NONE;
+        double bestScore = Double.POSITIVE_INFINITY;
 
-            double armCx = w * (0.5 + sign * 0.39) + armX.v * w * 0.17;
-            double armCy = h * 0.87 - armY.v * h * 0.17;
-            double armHalfW = w * 0.12 * Math.min(1.7, armScale.v);
-            double armHalfH = h * 0.13 * Math.min(1.6, armScale.v);
-            boolean armHit = inside(x, y, armCx, armCy, armHalfW, armHalfH);
+        for (Target t : new Target[]{Target.MAIN_ITEM, Target.OFF_ITEM, Target.MAIN_HAND, Target.OFF_HAND}) {
+            boolean main = t == Target.MAIN_HAND || t == Target.MAIN_ITEM;
+            boolean item = t == Target.MAIN_ITEM || t == Target.OFF_ITEM;
+            if (item && (main ? mc.player.getMainHandItem() : mc.player.getOffhandItem()).isEmpty())
+                continue;
+            if (preferArm && item) continue;
 
-            double itemCx = w * (0.5 + sign * 0.265)
-                    + (armX.v * 0.17 + itemX.v * 0.115) * w;
-            double itemCy = h * 0.70 - (armY.v * 0.17 + itemY.v * 0.13) * h;
-            double itemHalfW = w * 0.105 * Math.min(1.9, itemScale.v * armScale.v);
-            double itemHalfH = h * 0.18 * Math.min(1.8, itemScale.v * armScale.v);
-            boolean itemHit = hasItem && inside(x, y, itemCx, itemCy, itemHalfW, itemHalfH);
+            double sign = main ? 1 : -1;
+            double handX = main ? Cfg.MAIN_HAND_X.v : Cfg.OFF_HAND_X.v;
+            double handY = main ? Cfg.MAIN_HAND_Y.v : Cfg.OFF_HAND_Y.v;
+            double handScale = main ? Cfg.MAIN_HAND_SIZE.v : Cfg.OFF_HAND_SIZE.v;
+            double localX = main ? Cfg.ITEM_VIEW_X.v : Cfg.ITEM_OFF_X.v;
+            double localY = main ? Cfg.ITEM_VIEW_Y.v : Cfg.ITEM_OFF_Y.v;
+            double itemScale = main ? Cfg.ITEM_VIEW_SIZE.v : Cfg.ITEM_OFF_SIZE.v;
 
-            if (preferArm && armHit) return main ? Target.MAIN_HAND : Target.OFF_HAND;
-            if (itemHit) return main ? Target.MAIN_ITEM : Target.OFF_ITEM;
-            if (armHit) return main ? Target.MAIN_HAND : Target.OFF_HAND;
+            // The parent-hand transform moves its item along with the hand;
+            // the item transform is relative to that parent.
+            double cx = item
+                    ? w * (0.5 + sign * .265)
+                            + w * (.17 * handX + .115 * localX * handScale)
+                    : w * (0.5 + sign * .39) + w * .17 * handX;
+            double cy = item
+                    ? h * .70 - h * (.17 * handY + .13 * localY * handScale)
+                    : h * .87 - h * .17 * handY;
+            double radiusX = item
+                    ? w * .105 * Math.max(.55, Math.min(2.2, handScale * itemScale))
+                    : w * .12 * Math.max(.55, Math.min(2.0, handScale));
+            double radiusY = item
+                    ? h * .18 * Math.max(.55, Math.min(2.2, handScale * itemScale))
+                    : h * .13 * Math.max(.55, Math.min(2.0, handScale));
+
+            // Last drag end is a much more faithful screen-space position
+            // than a synthetic perspective projection. Give it priority so
+            // repeated moves and wheel resizing keep working immediately.
+            if (hasLast[t.ordinal()]) {
+                double lx = lastX[t.ordinal()], ly = lastY[t.ordinal()];
+                double ax = Math.max(radiusX, 22), ay = Math.max(radiusY, 20);
+                double anchored = Math.pow((x - lx) / ax, 2)
+                                + Math.pow((y - ly) / ay, 2);
+                if (anchored <= 1.0 && anchored - .6 < bestScore) {
+                    best = t;
+                    bestScore = anchored - .6;
+                }
+            }
+
+            double dist = Math.pow((x - cx) / Math.max(radiusX, 16), 2)
+                        + Math.pow((y - cy) / Math.max(radiusY, 16), 2);
+            if (dist <= 1.0 && dist < bestScore) {
+                best = t;
+                bestScore = dist;
+            }
         }
-        return Target.NONE;
+        return best;
     }
 
     private static boolean click(MouseButtonEvent event) {
@@ -155,6 +185,9 @@ public final class ChatHudEditor {
         startX = xSetting(selected).v;
         startY = ySetting(selected).v;
         owner(selected).enabled = true;
+        lastX[selected.ordinal()] = event.x();
+        lastY[selected.ordinal()] = event.y();
+        hasLast[selected.ordinal()] = true;
         return true;
     }
     private static boolean drag(MouseButtonEvent event) {
@@ -166,10 +199,17 @@ public final class ChatHudEditor {
             xSetting(dragging).set(startX + (event.x() - startMouseX) / Math.max(1.0, width() * 0.17));
             ySetting(dragging).set(startY - (event.y() - startMouseY) / Math.max(1.0, height() * 0.17));
         }
+        lastX[dragging.ordinal()] = event.x();
+        lastY[dragging.ordinal()] = event.y();
+        hasLast[dragging.ordinal()] = true;
         return true;
     }
     private static boolean release(MouseButtonEvent event) {
         if (dragging == Target.NONE || event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
+        // Keep the final cursor position as the next editable anchor.
+        lastX[dragging.ordinal()] = event.x();
+        lastY[dragging.ordinal()] = event.y();
+        hasLast[dragging.ordinal()] = true;
         Cfg.changed(owner(dragging));
         dragging = Target.NONE;
         return true;
