@@ -16,7 +16,7 @@ public static class Const
     /// </summary>
     public static string[] Mods(string mc) => mc == "1.21.11"
         ? new[] { "fabric-api", "sodium", "lithium", "ferrite-core",
-                  "immediatelyfast", "entityculling", "modernfix", "modmenu", "skyboxify" }
+                  "immediatelyfast", "entityculling", "modernfix", "modmenu", "skyboxify", "wavey-capes" }
         : new[] { "fabric-api", "sodium", "lithium", "ferrite-core",
                   "immediatelyfast", "entityculling", "modernfix", "modmenu" };
 
@@ -29,6 +29,9 @@ public static class Dirs
     public static string Game(string mc) => mc == "1.21.11" ? Path.Combine(Root, "game") : Path.Combine(Root, "instances", mc);
     public static string Mods(string mc) => Path.Combine(Game(mc), "mods");
     public static string ResourcePacks(string mc) => Path.Combine(Game(mc), "resourcepacks");
+    public static string CustomMods(string mc) => Path.Combine(Game(mc), "lt6-custom-mods");
+    public static string CapeFile(string mc) => Path.Combine(Game(mc), "config", "lt6-cape.png");
+    public static string CapeEnabled(string mc) => Path.Combine(Game(mc), "config", "lt6-cape.enabled");
 }
 
 public static class Log
@@ -57,6 +60,39 @@ public sealed class Config
     public bool VerifyFiles { get; set; } = false;
     public int RamMb { get; set; } = 4096;
     public string CurseForgeKey { get; set; } = "";
+    public Dictionary<string, List<string>> DisabledMods { get; set; } = new();
+    public Dictionary<string, List<AddedMod>> AddedMods { get; set; } = new();
+    public bool CapeEnabled { get; set; } = true;
+
+    // Fabric API remains required; every other bundled mod can be toggled.
+    public bool IsEnabled(string mc, string slug) =>
+        slug.Equals("fabric-api", StringComparison.OrdinalIgnoreCase)
+        || !(DisabledMods.TryGetValue(mc, out var disabled)
+             && disabled.Contains(slug, StringComparer.OrdinalIgnoreCase));
+
+    public void SetEnabled(string mc, string slug, bool enabled)
+    {
+        if (slug.Equals("fabric-api", StringComparison.OrdinalIgnoreCase)) return;
+        if (!DisabledMods.TryGetValue(mc, out var disabled))
+            DisabledMods[mc] = disabled = new List<string>();
+        disabled.RemoveAll(x => x.Equals(slug, StringComparison.OrdinalIgnoreCase));
+        if (!enabled) disabled.Add(slug);
+    }
+
+    public IReadOnlyList<string> SelectedMods(string mc)
+    {
+        var mods = Const.Mods(mc).Where(id => IsEnabled(mc, id)).ToList();
+        foreach (var entry in AddedMods.GetValueOrDefault(mc) ?? new())
+            if (entry.Enabled && entry.Type == "modrinth" && !mods.Contains(entry.Id, StringComparer.OrdinalIgnoreCase))
+                mods.Add(entry.Id);
+        return mods;
+    }
+    public List<AddedMod> Extra(string mc)
+    {
+        if (!AddedMods.TryGetValue(mc, out var list)) AddedMods[mc] = list = new();
+        return list;
+    }
+
 
     static string FilePath => Path.Combine(Dirs.Root, "launcher.json");
 
@@ -80,6 +116,16 @@ public sealed class Config
         }
         catch (Exception e) { Log.W("config save: " + e.Message); }
     }
+}
+
+public sealed class AddedMod
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    // "modrinth" IDs are resolved by the official API; "local" is a copied JAR.
+    public string Type { get; set; } = "modrinth";
+    public string File { get; set; } = "";
+    public bool Enabled { get; set; } = true;
 }
 
 public sealed class ModRow
