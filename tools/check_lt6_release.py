@@ -142,7 +142,7 @@ check((JAVA/'mixin/LT6SkySunMixin.java').is_file()
       'Hide only the vanilla sun when Custom Sky is active')
 chat = (JAVA/'ChatHudEditor.java').read_text(encoding='utf-8')
 check('paintHandle' not in chat and 'Gfx.rr' in chat
-      and 'rect.contains(px, py)' in chat,
+      and 'tab(t).contains(px, py)' in chat,
       'Chat must expose exact grab buttons, never hidden crosses')
 check('ViewmodelHitboxes.get(main(t), item(t))' in chat
       and (JAVA/'ViewmodelHitboxes.java').is_file(),
