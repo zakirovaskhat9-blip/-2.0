@@ -106,26 +106,29 @@ public final class LT6Screen extends Screen {
         this.x = (int)Math.round(Math.max(0, width - w) * Cfg.UI_X.v / 100.0);
         this.y = (int)Math.round(Math.max(0, height - h) * Cfg.UI_Y.v / 100.0);
         this.sideW = Math.min(184, Math.max(124, w / 3));
-        this.contentX = x + sideW + 20;
-        this.contentW = Math.max(108, w - sideW - 38);
-        this.viewTop = y + 98;
-        this.viewBottom = y + h - 34;
+        this.contentX = x + sideW + 12;
+        this.contentW = Math.max(108, w - sideW - 25);
+        // Use the entire compact panel: the settings pane scrolls independently.
+        this.viewTop = y + 78;
+        this.viewBottom = y + h - 20;
 
-        int veilAlpha = Cfg.UI_BLUR.v ? 60 + (int)(Cfg.UI_BLUR_LEVEL.v * .65) : 93;
-        g.fill(0, 0, width, height, (veilAlpha << 24) | 0x030912);
+        // No full-screen dark veil. Only the small draggable panel is drawn.
+        if (Cfg.UI_GLOW.v) Gfx.glow(g, x, y, w, h, 9, 0x000000, .25f, 2);
+        // Constrain all decorative particles to the menu, not the entire game.
+        g.enableScissor(x + 2, y + 2, x + w - 2, y + h - 2);
         MenuParticles.render(g, width, height, x, y, w, h);
-        if (Cfg.UI_GLOW.v) Gfx.glow(g, x, y, w, h, 10, 0x000000, .25f, 3);
-        int opacity = Math.max(170, Math.min(250, (int)(Cfg.UI_OPACITY.v * 2.55)));
-        Gfx.rr(g, x, y, w, h, 10, (opacity << 24) | (BG & 0xFFFFFF));
+        g.disableScissor();
+        int opacity = Math.max(190, Math.min(250, (int)(Cfg.UI_OPACITY.v * 2.55)));
+        Gfx.rr(g, x, y, w, h, 9, (opacity << 24) | (BG & 0xFFFFFF));
         Gfx.rr(g, x + 1, y + 1, sideW, h - 2, 10, SIDE);
         Gfx.ring(g, x, y, w, h, 11, 1, 0x345B7DA2);
-        Gfx.rr(g, x + 12, y + 17, 3, 24, 1, ACCENT);
-        Gfx.str(g, font, "LT6", x + 25, y + 20, TEXT);
-        Gfx.str(g, font, "MINIMAL CLIENT", x + 25, y + 34, MUTED);
+        Gfx.rr(g, x + 9, y + 12, 3, 22, 1, ACCENT);
+        Gfx.str(g, font, "LT6", x + 20, y + 12, TEXT);
+        Gfx.str(g, font, "CLIENT", x + 20, y + 26, MUTED);
         // Split visuals into two actual categories instead of crowding one list.
         // All tabs always have distinct module and settings contexts.
         final String[] sections = {"V1", "V2", "Player", "GUI"};
-        int tabW = Math.max(23, (sideW - 33) / sections.length), tabY = y + 58;
+        int tabW = Math.max(23, (sideW - 33) / sections.length), tabY = y + 47;
         for (int i = 0; i < sections.length; i++) {
             final int next = i;
             int tx = x + 10 + i * (tabW + 4);
@@ -152,9 +155,9 @@ public final class LT6Screen extends Screen {
             for (int index = 0; index < group.length; index++) {
                 final int global = first + index;
                 Cfg.Module m = group[index];
-                int itemSpacing = Math.max(30, Math.min(48, (h - 147) / group.length));
-                int sy = y + 101 + index * itemSpacing, sx = x + 10, sw = sideW - 18;
-                int itemHeight = Math.max(25, itemSpacing - 5);
+                int itemSpacing = Math.max(28, Math.min(48, (h - 106) / group.length));
+                int sy = y + 83 + index * itemSpacing, sx = x + 10, sw = sideW - 18;
+                int itemHeight = Math.max(23, itemSpacing - 4);
                 boolean active = selected == global;
                 int fill = active ? 0xFF253F58
                         : hover(mx, my, sx, sy, sw, itemHeight) ? 0xFF203043
@@ -178,8 +181,8 @@ public final class LT6Screen extends Screen {
             }
         } else if (section == 2) {
             // Clickable Player card: selecting it does NOT inherit Target ESP.
-            Gfx.str(g, font, "PLAYER", x + 14, y + 104, MUTED);
-            int sx = x + 10, sy = y + 129, sw = sideW - 18;
+            Gfx.str(g, font, "PLAYER", x + 14, y + 92, MUTED);
+            int sx = x + 10, sy = y + 108, sw = sideW - 18;
             Gfx.rr(g, sx, sy, sw, 51, 7, 0xFF253F58);
             Gfx.str(g, font, "Fast XP", sx + 11, sy + 11, TEXT);
             Gfx.str(g, font, "Быстрый опыт", sx + 11, sy + 30, MUTED);
@@ -195,7 +198,7 @@ public final class LT6Screen extends Screen {
             String[] pages = {"Оформление", "Частицы"};
             for (int i = 0; i < pages.length; i++) {
                 final int id = i;
-                int sy = y + 105 + i * 46, sx = x + 10, sw = sideW - 18;
+                int sy = y + 87 + i * 43, sx = x + 10, sw = sideW - 18;
                 Gfx.rr(g, sx, sy, sw, 37, 6,
                         guiPage == i ? 0xFF253F58 : 0xFF182637);
                 Gfx.str(g, font, pages[i], sx + 10, sy + 13,
@@ -209,25 +212,25 @@ public final class LT6Screen extends Screen {
             }
         }
 
-        Gfx.str(g, font, "Y / ESC  |  ДВИГАЙ ЗАГОЛОВОК", x + 12, y + h - 22, 0xFF7F92A9);
+        if (h >= 270) Gfx.str(g, font, "Y / ESC  |  ДВИГАЙ ЗАГОЛОВОК", x + 12, y + h - 22, 0xFF7F92A9);
 
         Cfg.Module m = section == 2 ? Cfg.FAST_XP
                 : section == 3 ? Cfg.STYLE : module();
         String headline = section == 2 ? "Fast XP"
                 : section == 3 ? (guiPage == 0 ? "Оформление" : "Частицы")
                 : LABELS[selected];
-        Gfx.str(g, font, headline, contentX, y + 23, TEXT);
+        Gfx.str(g, font, headline, contentX, y + 10, TEXT);
         Gfx.str(g, font, Gfx.trim(font,
                 section == 3 ? "Минималистичный интерфейс LT6" : m.desc,
-                Math.max(90, contentW - 10)), contentX, y + 39, MUTED);
-        Gfx.rr(g, contentX, y + 58, contentW, 32, 6, CARD);
+                Math.max(90, contentW - 10)), contentX, y + 25, MUTED);
+        Gfx.rr(g, contentX, y + 43, contentW, 28, 5, CARD);
         if (section == 3) {
-            Gfx.str(g, font, "Настройка внешнего вида", contentX + 12, y + 69, TEXT);
+            Gfx.str(g, font, "Внешний вид", contentX + 9, y + 52, TEXT);
         } else {
-            Gfx.str(g, font, "Включено", contentX + 12, y + 69, TEXT);
+            Gfx.str(g, font, "Включено", contentX + 9, y + 52, TEXT);
             int toggleX = contentX + contentW - 49;
-            Gfx.toggle(g, toggleX, y + 67, m.enabled ? 1f : 0f, ACCENT);
-            area(toggleX - 9, y + 58, 58, 32, () -> Cfg.toggle(m));
+            Gfx.toggle(g, toggleX, y + 49, m.enabled ? 1f : 0f, ACCENT);
+            area(toggleX - 9, y + 43, 58, 28, () -> Cfg.toggle(m));
         }
 
         int view = Math.max(1, viewBottom - viewTop);
@@ -256,7 +259,7 @@ public final class LT6Screen extends Screen {
             Gfx.rr(g, trackX, viewTop, 3, view, 1, 0x365D718A);
             Gfx.rr(g, trackX, top, 3, thumb, 1, ACCENT);
         }
-        Gfx.str(g, font, "Автосохранение  |  размер: правый угол", contentX, y + h - 21, 0xFF7F92A9);
+        if (h >= 260) Gfx.str(g, font, "Автосохранение", contentX, y + h - 17, 0xFF7F92A9);
         Gfx.rr(g, x + w - 18, y + h - 18, 13, 13, 2, 0xFF31455D);
         g.fill(x + w - 14, y + h - 11, x + w - 8, y + h - 9, ACCENT);
     }
